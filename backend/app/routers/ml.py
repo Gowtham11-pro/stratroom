@@ -8,15 +8,18 @@ from sqlalchemy import text
 from app.core.db import get_db
 from app.core.deps import require_role
 
-_ml_scripts = os.path.join(os.path.dirname(__file__), "..", "..", "ml", "scripts")
-if _ml_scripts not in sys.path:
-    sys.path.insert(0, _ml_scripts)
-from inference_all import (
-    predict_risk, predict_revenue, predict_attrition,
-    predict_incidents, predict_budget_variance, run_full_forecast,
-)
-
 router = APIRouter(prefix="/ml", tags=["ml"])
+
+
+def _load_ml_models():
+    _ml_scripts = os.path.join(os.path.dirname(__file__), "..", "..", "ml", "scripts")
+    if _ml_scripts not in sys.path:
+        sys.path.insert(0, _ml_scripts)
+    from inference_all import (
+        predict_risk, predict_revenue, predict_attrition,
+        predict_incidents, predict_budget_variance, run_full_forecast,
+    )
+    return predict_risk, predict_revenue, predict_attrition, predict_incidents, predict_budget_variance, run_full_forecast
 
 ALLOWED_TABLES = {"risks", "incidents", "scorecards", "budget_lines", "tasks", "projects"}
 
@@ -67,7 +70,8 @@ class BudgetPayload(BaseModel):
 @router.post("/risk")
 async def ml_risk(payload: RiskPayload, ctx: dict = Depends(require_role("member"))):
     try:
-        return {"prediction": predict_risk(payload.model_dump())}
+        models = _load_ml_models()
+        return {"prediction": models[0](payload.model_dump())}
     except FileNotFoundError:
         raise HTTPException(status_code=503, detail="Model not trained. Run train_all.py first.")
     except Exception:
@@ -77,7 +81,8 @@ async def ml_risk(payload: RiskPayload, ctx: dict = Depends(require_role("member
 @router.post("/revenue")
 async def ml_revenue(payload: RevenuePayload, ctx: dict = Depends(require_role("member"))):
     try:
-        return {"prediction": predict_revenue(payload.model_dump())}
+        models = _load_ml_models()
+        return {"prediction": models[1](payload.model_dump())}
     except FileNotFoundError:
         raise HTTPException(status_code=503, detail="Model not trained. Run train_all.py first.")
     except Exception:
@@ -87,7 +92,8 @@ async def ml_revenue(payload: RevenuePayload, ctx: dict = Depends(require_role("
 @router.post("/attrition")
 async def ml_attrition(payload: AttritionPayload, ctx: dict = Depends(require_role("member"))):
     try:
-        return {"prediction": predict_attrition(payload.model_dump())}
+        models = _load_ml_models()
+        return {"prediction": models[2](payload.model_dump())}
     except FileNotFoundError:
         raise HTTPException(status_code=503, detail="Model not trained. Run train_all.py first.")
     except Exception:
@@ -97,7 +103,8 @@ async def ml_attrition(payload: AttritionPayload, ctx: dict = Depends(require_ro
 @router.post("/incidents")
 async def ml_incidents(payload: IncidentPayload, ctx: dict = Depends(require_role("member"))):
     try:
-        return {"prediction": predict_incidents(payload.model_dump())}
+        models = _load_ml_models()
+        return {"prediction": models[3](payload.model_dump())}
     except FileNotFoundError:
         raise HTTPException(status_code=503, detail="Model not trained. Run train_all.py first.")
     except Exception:
@@ -107,7 +114,8 @@ async def ml_incidents(payload: IncidentPayload, ctx: dict = Depends(require_rol
 @router.post("/budget")
 async def ml_budget(payload: BudgetPayload, ctx: dict = Depends(require_role("member"))):
     try:
-        return {"prediction": predict_budget_variance(payload.model_dump())}
+        models = _load_ml_models()
+        return {"prediction": models[4](payload.model_dump())}
     except FileNotFoundError:
         raise HTTPException(status_code=503, detail="Model not trained. Run train_all.py first.")
     except Exception:
@@ -142,6 +150,7 @@ async def ml_full_forecast(
             )
             org_data[key] = [dict(r) for r in result.mappings().all()]
 
-        return {"forecast": run_full_forecast(org_data)}
+        models = _load_ml_models()
+        return {"forecast": models[5](org_data)}
     except Exception:
         raise HTTPException(status_code=500, detail="Forecast failed")

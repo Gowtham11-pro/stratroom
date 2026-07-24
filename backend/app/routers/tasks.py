@@ -34,7 +34,7 @@ class TaskCreate(BaseModel):
         if not v:
             raise ValueError("Title is required")
         if len(v) > 500:
-            raise ValueError(f"Title exceeds maximum length of 500")
+            raise ValueError("Title exceeds maximum length of 500")
         return v
 
     @field_validator("priority")
@@ -69,7 +69,7 @@ class TaskUpdate(BaseModel):
             if not v:
                 raise ValueError("Title cannot be empty")
             if len(v) > 500:
-                raise ValueError(f"Title exceeds maximum length of 500")
+                raise ValueError("Title exceeds maximum length of 500")
         return v
 
     @field_validator("priority")

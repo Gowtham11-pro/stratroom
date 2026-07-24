@@ -1,6 +1,7 @@
 import os
 import uuid
 import time
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -23,7 +24,6 @@ setup_logging(
     json_mode=settings.LOG_JSON_MODE,
 )
 
-import logging
 logger = logging.getLogger("stratroom")
 
 _start_time = time.time()

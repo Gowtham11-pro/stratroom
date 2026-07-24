@@ -116,14 +116,22 @@ async def update_risk(
         raise HTTPException(status_code=403, detail="You can only update your own risks")
 
     updates = {}
-    if payload.name is not None: updates["name"] = payload.name
-    if payload.owner is not None: updates["owner"] = payload.owner
-    if payload.description is not None: updates["description"] = payload.description
-    if payload.mitigation is not None: updates["mitigation"] = payload.mitigation
-    if payload.inherent_likelihood is not None: updates["inherent_likelihood"] = payload.inherent_likelihood
-    if payload.inherent_impact is not None: updates["inherent_impact"] = payload.inherent_impact
-    if payload.residual_likelihood is not None: updates["residual_likelihood"] = payload.residual_likelihood
-    if payload.residual_impact is not None: updates["residual_impact"] = payload.residual_impact
+    if payload.name is not None:
+        updates["name"] = payload.name
+    if payload.owner is not None:
+        updates["owner"] = payload.owner
+    if payload.description is not None:
+        updates["description"] = payload.description
+    if payload.mitigation is not None:
+        updates["mitigation"] = payload.mitigation
+    if payload.inherent_likelihood is not None:
+        updates["inherent_likelihood"] = payload.inherent_likelihood
+    if payload.inherent_impact is not None:
+        updates["inherent_impact"] = payload.inherent_impact
+    if payload.residual_likelihood is not None:
+        updates["residual_likelihood"] = payload.residual_likelihood
+    if payload.residual_impact is not None:
+        updates["residual_impact"] = payload.residual_impact
 
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")

@@ -42,7 +42,7 @@ jobs:
 
       - name: Lint with ruff
         run: |
-          ruff check backend/app/ --select E,F,W --ignore E501,E401,E741,F841,F401,W503
+          ruff check backend/app/ --select E,F,W --ignore E501,E401,E741,F841,F401
 
       - name: Run test suite
         run: python backend/tests/test_suite.py

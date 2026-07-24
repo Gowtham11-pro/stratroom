@@ -1,0 +1,80 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: stratroom_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-stratroom}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stratroom_pw}
+      POSTGRES_DB: ${POSTGRES_DB:-stratroom}
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    ports:
+      - "${DB_PORT:-}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-stratroom} -d ${POSTGRES_DB:-stratroom}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    networks:
+      - stratroom
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: stratroom_api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://stratroom:stratroom_pw@db:5432/stratroom}
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:8001}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_JSON_MODE: ${LOG_JSON_MODE:-true}
+      ENABLE_DOCS: ${ENABLE_DOCS:-false}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-20}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-120}
+      APP_VERSION: ${APP_VERSION:-1.0.0}
+    ports:
+      - "${API_PORT:-8001}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "2.0"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - stratroom
+
+networks:
+  stratroom:
+    driver: bridge
+
+volumes:
+  pgdata:
+    driver: local

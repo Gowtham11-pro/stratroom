@@ -1,0 +1,62 @@
+{
+  "models": [
+    {
+      "model": "risk",
+      "mae": 0.401,
+      "features": [
+        "inherent_likelihood",
+        "inherent_impact",
+        "days_open",
+        "vendor_concentration_pct"
+      ]
+    },
+    {
+      "model": "revenue",
+      "mae": 2.312,
+      "features": [
+        "quarter",
+        "pipeline_spend",
+        "dt_progress",
+        "market_index",
+        "headcount",
+        "churn_rate"
+      ]
+    },
+    {
+      "model": "attrition",
+      "accuracy": 1.0,
+      "features": [
+        "tenure_years",
+        "engagement_score",
+        "salary_ratio",
+        "manager_rating",
+        "promotion_years",
+        "workload_score",
+        "market_demand"
+      ]
+    },
+    {
+      "model": "incident",
+      "mae": 0.91,
+      "features": [
+        "active_risks",
+        "vendor_count",
+        "dt_progress",
+        "security_score",
+        "patch_latency_days",
+        "region_count"
+      ]
+    },
+    {
+      "model": "budget",
+      "mae": 3.228,
+      "features": [
+        "budget_planned",
+        "year",
+        "is_capital",
+        "dept_risk_score",
+        "inflation_rate"
+      ]
+    }
+  ]
+}

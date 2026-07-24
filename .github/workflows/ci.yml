@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install ruff
+          pip install -r backend/requirements.txt
+
+      - name: Lint with ruff
+        run: |
+          ruff check backend/app/ --select E,F,W --ignore E501,E401,E741,F841,F401,W503
+
+      - name: Run test suite
+        run: python backend/tests/test_suite.py
+
+      - name: Verify FastAPI app loads
+        run: |
+          cd backend
+          python -c "from app.main import app; print(f'Routes: {len(app.routes)}')"
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t stratroom-api:ci -f backend/Dockerfile .
+
+      - name: Verify Docker image
+        run: |
+          docker run --rm stratroom-api:ci python -c "from backend.app.main import app; print('OK')"
+
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit dependencies
+        run: pip-audit -r backend/requirements.txt

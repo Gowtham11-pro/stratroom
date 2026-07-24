@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+pgdata/
+node_modules/
+ml/models/*.joblib
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+# OS
+.DS_Store
+Thumbs.db
+*.log
+# Test caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/

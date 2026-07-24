@@ -18,7 +18,7 @@ python backend/tests/test_suite.py     # Offline tests (no DB)
 
 ## CI — `.github/workflows/ci.yml`
 Runs on push to `main`/`develop`, PR to `main`:
-1. `ruff check backend/app/ --select E,F,W --ignore E501,E401,E741,F841,F401,W503`
+1. `ruff check backend/app/ --select E,F,W --ignore E501,E401,E741,F841,F401`
 2. `python backend/tests/test_suite.py`
 3. `python -c "from app.main import app; print(f'Routes: {len(app.routes)}')"`
 4. `docker build -f backend/Dockerfile .`
@@ -46,5 +46,5 @@ Runs on push to `main`/`develop`, PR to `main`:
 - **No git repo** — `git init` before any commit work.
 - **Rate limiter** is per-process. Breaks with `--workers > 1` — needs Redis.
 - **ML inference** (`routers/ml.py`) adds `ml/scripts` to `sys.path` at module load time — don't move that import.
-- **Default users** (org_id=1): `admin@stratroom.com` / `manager@stratroom.com` / `member@stratroom.com` — all password `Admin@123`. Also `admin@test.com` (member role).
+- **Default users** (org_id=1): `admin@stratroom.com` — password `changeme` (from seed SQL in `01_init.sql:239`). Also `admin@test.com` (member role).
 - **Container PYTHONPATH** = `/app/backend`, so imports use `from app.main import app`, not `from backend.app.main`.

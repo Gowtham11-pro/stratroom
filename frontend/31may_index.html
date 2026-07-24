@@ -9623,25 +9623,27 @@ function sendRiskModuleChat() {
     container.appendChild(errDiv); container.scrollTop = container.scrollHeight;
     return;
   }
+  var ac=new AbortController();var to=setTimeout(function(){ac.abort();},60000);
   fetch('/agents/chat', {
     method: 'POST',
+    signal: ac.signal,
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('sr_backend_token') || localStorage.getItem('stratroom_token') || '') },
     body: JSON.stringify({ agent: 'risk', message: msg, provider: cfg.provider, api_key: cfg.apiKey, model: cfg.model, conversation_id: _agentConversations['risk'] || null, base_url: cfg.baseUrl })
-  }).then(function(r) { return r.json(); }).then(function(data) {
+  }).then(function(r) { clearTimeout(to); return r.json(); }).then(function(data) {
     typingDiv.remove();
-    if (data.error) {
+    if (data.error || data.detail) {
       var errD = document.createElement('div'); errD.style.cssText = 'display:flex; gap:8px;';
-      errD.innerHTML = '<div style="width:24px; height:24px; border-radius:6px; background:var(--surface); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:10px;">SR</div><div style="background:var(--surface); border:1px solid var(--border); border-radius:9px 9px 9px 3px; padding:9px 12px; font-size:12px; color:var(--red);">' + data.error.replace(/</g,'&lt;') + '</div>';
+      errD.innerHTML = '<div style="width:24px; height:24px; border-radius:6px; background:var(--surface); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:10px;">SR</div><div style="background:var(--surface); border:1px solid var(--border); border-radius:9px 9px 9px 3px; padding:9px 12px; font-size:12px; color:var(--red);">' + (data.error || data.detail || '').replace(/</g,'&lt;') + '</div>';
       container.appendChild(errD); container.scrollTop = container.scrollHeight; return;
     }
     _agentConversations['risk'] = data.conversation_id;
     var respDiv = document.createElement('div'); respDiv.style.cssText = 'display:flex; gap:8px;';
-    respDiv.innerHTML = '<div style="width:24px; height:24px; border-radius:6px; background:var(--surface); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:10px;">SR</div><div style="background:var(--surface); border:1px solid var(--border); border-radius:9px 9px 9px 3px; padding:9px 12px; font-size:12px; color:var(--text2); line-height:1.65; white-space:pre-wrap;">' + data.response.replace(/</g,'&lt;') + '</div>';
+    respDiv.innerHTML = '<div style="width:24px; height:24px; border-radius:6px; background:var(--surface); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:10px;">SR</div><div style="background:var(--surface); border:1px solid var(--border); border-radius:9px 9px 9px 3px; padding:9px 12px; font-size:12px; color:var(--text2); line-height:1.65; white-space:pre-wrap;">' + (data.response || '').replace(/</g,'&lt;') + '</div>';
     container.appendChild(respDiv); container.scrollTop = container.scrollHeight;
   }).catch(function(e) {
     typingDiv.remove();
     var errC = document.createElement('div'); errC.style.cssText = 'display:flex; gap:8px;';
-    errC.innerHTML = '<div style="width:24px; height:24px; border-radius:6px; background:var(--surface); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:10px;">SR</div><div style="background:var(--surface); border:1px solid var(--border); border-radius:9px 9px 9px 3px; padding:9px 12px; font-size:12px; color:var(--red);">Error: ' + e.message.replace(/</g,'&lt;') + '</div>';
+    errC.innerHTML = '<div style="width:24px; height:24px; border-radius:6px; background:var(--surface); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:10px;">SR</div><div style="background:var(--surface); border:1px solid var(--border); border-radius:9px 9px 9px 3px; padding:9px 12px; font-size:12px; color:var(--red);">Error: ' + (e.message || '').replace(/</g,'&lt;') + '</div>';
     container.appendChild(errC); container.scrollTop = container.scrollHeight;
   });
 }
@@ -9651,14 +9653,16 @@ function refreshRiskSignals() {
   el.innerHTML = '<div style="color:var(--text3);">🤖 Refreshing risk signals...</div>';
   var cfg = _getLLMConfig();
   if (!cfg.apiKey && cfg.provider !== 'ollama') { el.innerHTML = '<div style="color:var(--red);">Configure your LLM API key in Settings.</div>'; return; }
+  var ac=new AbortController();var to=setTimeout(function(){ac.abort();},60000);
   fetch('/agents/chat', {
     method: 'POST',
+    signal: ac.signal,
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('sr_backend_token') || localStorage.getItem('stratroom_token') || '') },
     body: JSON.stringify({ agent: 'risk', message: 'List the top 3-4 current risk signals from the register. For each, give: signal name, current status, and one-line assessment. Format as bullet points.', provider: cfg.provider, api_key: cfg.apiKey, model: cfg.model, conversation_id: null, base_url: cfg.baseUrl })
-  }).then(function(r) { return r.json(); }).then(function(data) {
-    if (data.error) { el.innerHTML = '<div style="color:var(--red);">' + data.error.replace(/</g,'&lt;') + '</div>'; return; }
-    el.innerHTML = '<div style="white-space:pre-wrap;font-size:12px;line-height:1.7;color:var(--text2)">' + data.response.replace(/</g,'&lt;') + '</div>';
-  }).catch(function(e) { el.innerHTML = '<div style="color:var(--red);">Error: ' + e.message.replace(/</g,'&lt;') + '</div>'; });
+  }).then(function(r) { clearTimeout(to); return r.json(); }).then(function(data) {
+    if (data.error || data.detail) { el.innerHTML = '<div style="color:var(--red);">' + (data.error || data.detail || '').replace(/</g,'&lt;') + '</div>'; return; }
+    el.innerHTML = '<div style="white-space:pre-wrap;font-size:12px;line-height:1.7;color:var(--text2)">' + (data.response || '').replace(/</g,'&lt;') + '</div>';
+  }).catch(function(e) { if(e.name!=='AbortError'){el.innerHTML = '<div style="color:var(--red);">Error: ' + (e.message || '').replace(/</g,'&lt;') + '</div>';}else{el.innerHTML='<div style="color:var(--red);">Request timed out. Check your LLM provider.</div>';} });
 }
 function generateRiskRecommendations() {
   const el = document.getElementById('risk-recs-content');
@@ -9666,14 +9670,16 @@ function generateRiskRecommendations() {
   el.innerHTML = '<div style="color:var(--text3);">⚡ Generating fresh recommendations...</div>';
   var cfg = _getLLMConfig();
   if (!cfg.apiKey && cfg.provider !== 'ollama') { el.innerHTML = '<div style="color:var(--red);">Configure your LLM API key in Settings.</div>'; return; }
+  var ac=new AbortController();var to=setTimeout(function(){ac.abort();},60000);
   fetch('/agents/chat', {
     method: 'POST',
+    signal: ac.signal,
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('sr_backend_token') || localStorage.getItem('stratroom_token') || '') },
     body: JSON.stringify({ agent: 'risk', message: 'Give 2-3 prioritized risk mitigation recommendations. For each: one-line action, owner, deadline. Format clearly.', provider: cfg.provider, api_key: cfg.apiKey, model: cfg.model, conversation_id: null, base_url: cfg.baseUrl })
-  }).then(function(r) { return r.json(); }).then(function(data) {
-    if (data.error) { el.innerHTML = '<div style="color:var(--red);">' + data.error.replace(/</g,'&lt;') + '</div>'; return; }
-    el.innerHTML = '<div style="white-space:pre-wrap;font-size:12px;line-height:1.7;color:var(--text2)">' + data.response.replace(/</g,'&lt;') + '</div>';
-  }).catch(function(e) { el.innerHTML = '<div style="color:var(--red);">Error: ' + e.message.replace(/</g,'&lt;') + '</div>'; });
+  }).then(function(r) { clearTimeout(to); return r.json(); }).then(function(data) {
+    if (data.error || data.detail) { el.innerHTML = '<div style="color:var(--red);">' + (data.error || data.detail || '').replace(/</g,'&lt;') + '</div>'; return; }
+    el.innerHTML = '<div style="white-space:pre-wrap;font-size:12px;line-height:1.7;color:var(--text2)">' + (data.response || '').replace(/</g,'&lt;') + '</div>';
+  }).catch(function(e) { if(e.name!=='AbortError'){el.innerHTML = '<div style="color:var(--red);">Error: ' + (e.message || '').replace(/</g,'&lt;') + '</div>';}else{el.innerHTML='<div style="color:var(--red);">Request timed out. Check your LLM provider.</div>';} });
 }
 function runDeepRiskAnalysis() {
   const out = document.getElementById('risk-analysis-output');
@@ -9682,14 +9688,16 @@ function runDeepRiskAnalysis() {
   out.innerHTML = '<span style="color:var(--text3);">🧠 Running deep risk analysis...</span>';
   var cfg = _getLLMConfig();
   if (!cfg.apiKey && cfg.provider !== 'ollama') { out.innerHTML = '<span style="color:var(--red);">Configure your LLM API key in Settings.</span>'; return; }
+  var ac=new AbortController();var to=setTimeout(function(){ac.abort();},60000);
   fetch('/agents/chat', {
     method: 'POST',
+    signal: ac.signal,
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('sr_backend_token') || localStorage.getItem('stratroom_token') || '') },
     body: JSON.stringify({ agent: 'risk', message: 'Perform a deep analysis of the risk register. Identify compound risk chains (how risks feed into each other), estimate financial exposure, and provide board-level recommendations. Format with clear headers and sections.', provider: cfg.provider, api_key: cfg.apiKey, model: cfg.model, conversation_id: null, base_url: cfg.baseUrl })
-  }).then(function(r) { return r.json(); }).then(function(data) {
-    if (data.error) { out.innerHTML = '<span style="color:var(--red);">' + data.error.replace(/</g,'&lt;') + '</span>'; return; }
-    out.innerHTML = '<div style="white-space:pre-wrap;font-size:12px;line-height:1.7;color:var(--text2)">' + data.response.replace(/</g,'&lt;') + '</div>';
-  }).catch(function(e) { out.innerHTML = '<span style="color:var(--red);">Error: ' + e.message.replace(/</g,'&lt;') + '</span>'; });
+  }).then(function(r) { clearTimeout(to); return r.json(); }).then(function(data) {
+    if (data.error || data.detail) { out.innerHTML = '<span style="color:var(--red);">' + (data.error || data.detail || '').replace(/</g,'&lt;') + '</span>'; return; }
+    out.innerHTML = '<div style="white-space:pre-wrap;font-size:12px;line-height:1.7;color:var(--text2)">' + (data.response || '').replace(/</g,'&lt;') + '</div>';
+  }).catch(function(e) { if(e.name!=='AbortError'){out.innerHTML = '<span style="color:var(--red);">Error: ' + (e.message || '').replace(/</g,'&lt;') + '</span>';}else{out.innerHTML='<span style="color:var(--red);">Request timed out. Check your LLM provider.</span>';} });
 }
 function generateRiskTasks() {
   const el = document.getElementById('risk-tasks-content');
@@ -9697,14 +9705,16 @@ function generateRiskTasks() {
   el.innerHTML = '<div style="color:var(--text3);">⚡ Generating AI tasks for exec approval...</div>';
   var cfg = _getLLMConfig();
   if (!cfg.apiKey && cfg.provider !== 'ollama') { el.innerHTML = '<div style="color:var(--red);">Configure your LLM API key in Settings.</div>'; return; }
+  var ac=new AbortController();var to=setTimeout(function(){ac.abort();},60000);
   fetch('/agents/chat', {
     method: 'POST',
+    signal: ac.signal,
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('sr_backend_token') || localStorage.getItem('stratroom_token') || '') },
     body: JSON.stringify({ agent: 'risk', message: 'Generate 2-3 prioritized action tasks from the current risk register. For each: task title, owner, deadline, priority. Format as actionable items.', provider: cfg.provider, api_key: cfg.apiKey, model: cfg.model, conversation_id: null, base_url: cfg.baseUrl })
-  }).then(function(r) { return r.json(); }).then(function(data) {
-    if (data.error) { el.innerHTML = '<div style="color:var(--red);">' + data.error.replace(/</g,'&lt;') + '</div>'; return; }
-    el.innerHTML = '<div style="white-space:pre-wrap;font-size:12px;line-height:1.7;color:var(--text2)">' + data.response.replace(/</g,'&lt;') + '</div>';
-  }).catch(function(e) { el.innerHTML = '<div style="color:var(--red);">Error: ' + e.message.replace(/</g,'&lt;') + '</div>'; });
+  }).then(function(r) { clearTimeout(to); return r.json(); }).then(function(data) {
+    if (data.error || data.detail) { el.innerHTML = '<div style="color:var(--red);">' + (data.error || data.detail || '').replace(/</g,'&lt;') + '</div>'; return; }
+    el.innerHTML = '<div style="white-space:pre-wrap;font-size:12px;line-height:1.7;color:var(--text2)">' + (data.response || '').replace(/</g,'&lt;') + '</div>';
+  }).catch(function(e) { if(e.name!=='AbortError'){el.innerHTML = '<div style="color:var(--red);">Error: ' + (e.message || '').replace(/</g,'&lt;') + '</div>';}else{el.innerHTML='<div style="color:var(--red);">Request timed out. Check your LLM provider.</div>';} });
 }
 // Expose to global scope for onclick handlers
 window.modChatQuickRisk = modChatQuickRisk;
@@ -19845,17 +19855,19 @@ window.sendModuleChat=function(moduleId){
     if(sendBtn){sendBtn.disabled=false;sendBtn.innerHTML='Send ↑';}
     return;
   }
+  var ac=new AbortController();var to=setTimeout(function(){ac.abort();},60000);
   fetch('/agents/chat',{
     method:'POST',
+    signal:ac.signal,
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},
     body:JSON.stringify({agent:agentDomain,message:userMsg,provider:cfg.provider,api_key:cfg.apiKey,model:cfg.model,conversation_id:_agentConversations[agentDomain]||null,base_url:cfg.baseUrl})
-  }).then(function(r){return r.json();}).then(function(data){
+  }).then(function(r){clearTimeout(to);return r.json();}).then(function(data){
     ty.remove();
     if(sendBtn){sendBtn.disabled=false;sendBtn.innerHTML='Send ↑';}
-    if(data.error){var errDiv2=document.createElement('div');errDiv2.className='smc-msg-bubble';errDiv2.innerHTML='<div class="smc-avatar">SR</div><div class="smc-bubble-text" style="font-size:12px;color:var(--red)">'+_escHtml(data.error)+'</div>';container.appendChild(errDiv2);container.scrollTop=container.scrollHeight;return;}
+    if(data.error||data.detail){var errDiv2=document.createElement('div');errDiv2.className='smc-msg-bubble';errDiv2.innerHTML='<div class="smc-avatar">SR</div><div class="smc-bubble-text" style="font-size:12px;color:var(--red)">'+_escHtml(data.error||data.detail)+'</div>';container.appendChild(errDiv2);container.scrollTop=container.scrollHeight;return;}
     _agentConversations[agentDomain]=data.conversation_id;
     var rd=document.createElement('div');rd.className='smc-msg-bubble';
-    rd.innerHTML='<div class="smc-avatar">SR</div><div class="smc-bubble-text" style="font-size:12px;line-height:1.5;white-space:pre-wrap">'+_escHtml(data.response)+'</div>';
+    rd.innerHTML='<div class="smc-avatar">SR</div><div class="smc-bubble-text" style="font-size:12px;line-height:1.5;white-space:pre-wrap">'+_escHtml(data.response||'')+'</div>';
     container.appendChild(rd);
     // Render tool results as interactive task cards with action buttons
     if(data.tool_results&&data.tool_results.length){

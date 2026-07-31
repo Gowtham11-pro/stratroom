@@ -1,67 +1,44 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.db import get_db
 from app.core.deps import require_role
+from app.services.java_bridge import bridge
 
 router = APIRouter(tags=["budgets"])
 
 
 @router.get("/budgets")
-async def list_budget_lines(
-    db: AsyncSession = Depends(get_db),
-    ctx: dict = Depends(require_role("member")),
-):
-    user_id = ctx["user_id"]
-    org_id = ctx["org_id"]
+async def list_budget_lines(ctx: dict = Depends(require_role("member"))):
+    emp_id = ctx["user_id"]
     is_admin = ctx["is_admin"]
     is_manager = ctx["is_manager"]
 
     if is_admin or is_manager:
-        result = await db.execute(
-            text("SELECT id, year, month, gl_account, gl_name, budget_type, project, total, department, employee, notes FROM budget_lines WHERE org_id = :oid ORDER BY year, id"),
-            {"oid": org_id},
-        )
+        data = await bridge.get(bridge.db_service, "/budgetsListview")
     else:
-        result = await db.execute(
-            text("SELECT id, year, month, gl_account, gl_name, budget_type, project, total, department, employee, notes FROM budget_lines WHERE org_id = :oid AND employee = :email ORDER BY year, id"),
-            {"oid": org_id, "email": ctx["email"]},
-        )
-    rows = result.mappings().all()
-    return {"budgets": [dict(r) for r in rows]}
+        data = await bridge.get(bridge.db_service, f"/budgets/{emp_id}")
+
+    rows = data if isinstance(data, list) else data.get("budgets", data.get("list", []))
+    return {"budgets": rows}
 
 
 @router.get("/budgets/summary")
-async def budget_summary(
-    db: AsyncSession = Depends(get_db),
-    ctx: dict = Depends(require_role("member")),
-):
-    user_id = ctx["user_id"]
-    org_id = ctx["org_id"]
+async def budget_summary(ctx: dict = Depends(require_role("member"))):
+    emp_id = ctx["user_id"]
     is_admin = ctx["is_admin"]
     is_manager = ctx["is_manager"]
 
     if is_admin or is_manager:
-        result = await db.execute(
-            text("""
-                SELECT COUNT(*) as line_count,
-                       SUM(total) as total_amount,
-                       COUNT(DISTINCT project) as project_count,
-                       COUNT(DISTINCT gl_account) as gl_count
-                FROM budget_lines WHERE org_id = :oid
-            """),
-            {"oid": org_id},
-        )
+        data = await bridge.get(bridge.db_service, "/budgetsListview")
     else:
-        result = await db.execute(
-            text("""
-                SELECT COUNT(*) as line_count,
-                       SUM(total) as total_amount,
-                       COUNT(DISTINCT project) as project_count,
-                       COUNT(DISTINCT gl_account) as gl_count
-                FROM budget_lines WHERE org_id = :oid AND employee = :email
-            """),
-            {"oid": org_id, "email": ctx["email"]},
-        )
-    row = result.mappings().one()
-    return dict(row)
+        data = await bridge.get(bridge.db_service, f"/budgets/{emp_id}")
+
+    rows = data if isinstance(data, list) else data.get("budgets", data.get("list", []))
+    total = sum(float(r.get("total", 0) or 0) for r in rows)
+    projects = set(r.get("project") for r in rows if r.get("project"))
+    gl_accounts = set(r.get("glAccount") or r.get("gl_account") for r in rows if r.get("glAccount") or r.get("gl_account"))
+
+    return {
+        "line_count": len(rows),
+        "total_amount": total,
+        "project_count": len(projects),
+        "gl_count": len(gl_accounts),
+    }

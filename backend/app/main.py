@@ -13,10 +13,11 @@ from app.core.logging_config import setup_logging, correlation_id_var, request_i
 from app.core.db import check_db_health
 from app.core.rate_limiter import limiter
 from app.ai.metrics import counters
+from app.services.java_bridge import bridge
 from app.routers import (
     auth, incidents, risks, predict, dashboard, scorecards, budgets,
     tasks, meetings, audit, complaints, compliance, swot, pestel_projects, org,
-    bcp, ai, initiatives, agents, ml, documents, compat,
+    bcp, ai, initiatives, agents, ml, documents, compat, api_v1,
 )
 
 setup_logging(
@@ -33,6 +34,7 @@ _start_time = time.time()
 async def lifespan(app: FastAPI):
     logger.info("StratRoom API starting — env=%s version=%s", settings.ENVIRONMENT, settings.APP_VERSION)
     yield
+    await bridge.close()
     logger.info("StratRoom API shutting down")
 
 
@@ -160,6 +162,7 @@ app.include_router(agents.router)
 app.include_router(ml.router)
 app.include_router(documents.router)
 app.include_router(compat.router)
+app.include_router(api_v1.router)
 
 
 @app.get("/health", tags=["monitoring"])
@@ -176,9 +179,17 @@ async def health():
 async def readiness():
     """Readiness probe — confirms service can handle requests."""
     db_ok = await check_db_health()
+    mysql_ok = False
+    try:
+        await bridge.get(bridge.db_service, "/userList")
+        mysql_ok = True
+    except Exception:
+        pass
+    all_ok = db_ok or mysql_ok
     return {
-        "status": "ready" if db_ok else "degraded",
+        "status": "ready" if all_ok else "degraded",
         "database": "ok" if db_ok else "unavailable",
+        "mysql": "ok" if mysql_ok else "unavailable",
         "uptime_seconds": round(time.time() - _start_time, 0),
     }
 

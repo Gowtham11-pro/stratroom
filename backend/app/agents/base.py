@@ -13,6 +13,7 @@ from app.ai.metrics import log_agent_run, counters
 from app.ai.query_enhancer import enhance_context
 from app.ai.memory import store_memory, prune_memory
 from app.ai.guardrails import validate_response
+from app.services.java_bridge import bridge
 
 logger = logging.getLogger("stratroom.ai.agents")
 
@@ -47,7 +48,6 @@ class AgentRunner:
         enhanced = ""
         try:
             enhanced = await enhance_context(
-                db,
                 agent_name=self.agent_name,
                 user_id=user_id,
                 org_id=org_id,
@@ -64,7 +64,7 @@ class AgentRunner:
 
         messages = []
         if conversation_id:
-            history = await self._load_history(db, conversation_id)
+            history = await self._load_history(conversation_id)
             messages = history
 
         # Rewrite confusing queries (e.g. "my tasks" -> "all tasks")
@@ -152,7 +152,6 @@ class AgentRunner:
         finally:
             elapsed_ms = int((time.time() - start_ms) * 1000)
             await log_agent_run(
-                db,
                 org_id=org_id,
                 user_id=user_id,
                 agent_name=self.agent_name,
@@ -164,10 +163,6 @@ class AgentRunner:
                 error_message=error_message,
                 retry_count=retry_count,
             )
-            try:
-                await db.commit()
-            except Exception:
-                logger.warning("Failed to commit metrics in finally block for agent=%s", self.agent_name)
 
         # Output guardrails
         is_valid, response_text, guardrail_reason = validate_response(response_text, self.agent_name)
@@ -177,22 +172,21 @@ class AgentRunner:
 
         if not conversation_id:
             try:
-                conversation_id = await self._create_conversation(db, user_id, org_id)
+                conversation_id = await self._create_conversation(user_id, org_id)
             except Exception:
                 logger.exception("Failed to create conversation for agent=%s", self.agent_name)
                 conversation_id = None
 
         if conversation_id:
             try:
-                await self._save_message(db, conversation_id, "user", user_message)
-                await self._save_message(db, conversation_id, "assistant", response_text)
+                await self._save_message(conversation_id, "user", user_message)
+                await self._save_message(conversation_id, "assistant", response_text)
             except Exception:
                 logger.exception("Failed to save messages for agent=%s conv=%s", self.agent_name, conversation_id)
 
         # Store insight and prune — failures are silent
         try:
             await store_memory(
-                db,
                 user_id=user_id,
                 org_id=org_id,
                 agent_name=self.agent_name,
@@ -201,16 +195,11 @@ class AgentRunner:
                 message=user_message,
             )
             await prune_memory(
-                db, user_id=user_id, org_id=org_id, agent_name=self.agent_name,
+                user_id=user_id, org_id=org_id, agent_name=self.agent_name,
             )
         except Exception:
             counters.record_memory_failure()
             logger.warning("Memory store/prune failed for agent=%s", self.agent_name)
-
-        try:
-            await db.commit()
-        except Exception:
-            logger.warning("Failed to commit agent session for agent=%s", self.agent_name)
 
         final_ms = int((time.time() - start_ms) * 1000)
 
@@ -287,11 +276,13 @@ class AgentRunner:
             # ── TASK TOOLS ──
             if tool_name == "query_tasks":
                 parsed = _parse_kv(args_raw)
+                email = ctx.get("email") if ctx else None
                 return await query_user_tasks(
                     db, user_id, org_id,
                     status_filter=parsed.get("status"),
                     priority_filter=parsed.get("priority"),
                     is_admin=is_admin,
+                    email=email,
                 )
 
             elif tool_name == "update_task":
@@ -299,14 +290,17 @@ class AgentRunner:
                 task_id = parsed.get("id")
                 if not task_id or not isinstance(task_id, int):
                     return {"error": "Missing or invalid task id. Usage: [TOOL_CALL:update_task:id=123,status=in_progress]"}
+                email = ctx.get("email") if ctx else None
                 return await update_task_progress(
                     db, user_id, org_id, task_id,
                     status=parsed.get("status"),
                     is_admin=is_admin,
+                    email=email,
                 )
 
             elif tool_name == "create_task":
                 parsed = _parse_kv(args_raw)
+                email = ctx.get("email") if ctx else None
                 return await create_task_tool(
                     db, org_id,
                     title=parsed.get("title", ""),
@@ -316,6 +310,8 @@ class AgentRunner:
                     due_date=parsed.get("due_date"),
                     status=parsed.get("status", "pending"),
                     assigned_user_id=parsed.get("assigned_user_id"),
+                    email=email,
+                    is_admin=is_admin,
                 )
 
             # ── RISK TOOLS ──
@@ -331,6 +327,7 @@ class AgentRunner:
 
             elif tool_name == "create_risk":
                 parsed = _parse_kv(args_raw)
+                email = ctx.get("email") if ctx else None
                 return await create_risk(
                     db, org_id,
                     name=parsed.get("name", ""),
@@ -341,6 +338,8 @@ class AgentRunner:
                     inherent_impact=parsed.get("inherent_impact", 3),
                     residual_likelihood=parsed.get("residual_likelihood", 2),
                     residual_impact=parsed.get("residual_impact", 2),
+                    email=email,
+                    is_admin=is_admin,
                 )
 
             elif tool_name == "update_risk":
@@ -378,7 +377,7 @@ class AgentRunner:
                 parsed = _parse_kv(args_raw)
                 is_manager = (ctx or {}).get("is_manager", False)
                 return await query_scorecards(
-                    db, user_id, org_id,
+                    user_id, org_id,
                     perspective_filter=parsed.get("perspective"),
                     status_filter=parsed.get("status"),
                     is_admin=is_admin,
@@ -388,15 +387,16 @@ class AgentRunner:
             elif tool_name == "query_scorecard_summary":
                 is_manager = (ctx or {}).get("is_manager", False)
                 return await query_scorecard_summary(
-                    db, user_id, org_id,
+                    user_id, org_id,
                     is_admin=is_admin,
                     is_manager=is_manager,
                 )
 
             elif tool_name == "create_scorecard":
                 parsed = _parse_kv(args_raw)
+                is_manager = (ctx or {}).get("is_manager", False)
                 return await create_scorecard(
-                    db, org_id,
+                    org_id,
                     perspective=parsed.get("perspective", ""),
                     kpi_name=parsed.get("kpi_name", ""),
                     target=parsed.get("target"),
@@ -404,6 +404,8 @@ class AgentRunner:
                     owner=parsed.get("owner", ""),
                     status=parsed.get("status", "on-track"),
                     assigned_user_id=parsed.get("assigned_user_id"),
+                    is_admin=is_admin,
+                    is_manager=is_manager,
                 )
 
             elif tool_name == "update_scorecard":
@@ -412,7 +414,7 @@ class AgentRunner:
                 if not sc_id or not isinstance(sc_id, int):
                     return {"error": "Missing or invalid scorecard id. Usage: [TOOL_CALL:update_scorecard:id=123,status=...]"}
                 return await update_scorecard(
-                    db, user_id, org_id, sc_id,
+                    user_id, org_id, sc_id,
                     is_admin=is_admin,
                     perspective=parsed.get("perspective"),
                     kpi_name=parsed.get("kpi_name"),
@@ -429,7 +431,7 @@ class AgentRunner:
                 if not sc_id or not isinstance(sc_id, int):
                     return {"error": "Missing or invalid scorecard id. Usage: [TOOL_CALL:delete_scorecard:id=123]"}
                 return await delete_scorecard(
-                    db, user_id, org_id, sc_id,
+                    user_id, org_id, sc_id,
                     is_admin=is_admin,
                 )
 
@@ -440,32 +442,25 @@ class AgentRunner:
             logger.exception("Tool execution failed: %s", tool_name)
             return {"error": f"Tool execution failed: {str(e)[:200]}"}
 
-    async def _create_conversation(self, db: AsyncSession, user_id: int | None, org_id: int | None = None) -> int:
-        result = await db.execute(
-            text(
-                "INSERT INTO agent_conversations (agent_name, user_id, org_id, title) "
-                "VALUES (:agent, :uid, :org_id, :title) RETURNING id"
-            ),
-            {"agent": self.agent_name, "uid": user_id, "org_id": org_id, "title": f"{self.agent_name} chat"},
-        )
-        return result.scalar()
+    async def _create_conversation(self, user_id: int | None, org_id: int | None = None) -> int | None:
+        resp = await bridge.post(bridge.db_service, "/conversations", json={
+            "agent_name": self.agent_name,
+            "user_id": user_id,
+            "org_id": org_id,
+            "title": f"{self.agent_name} chat",
+        })
+        return resp.get("id") if isinstance(resp, dict) else None
 
-    async def _save_message(self, db: AsyncSession, conversation_id: int, role: str, content: str):
-        await db.execute(
-            text(
-                "INSERT INTO agent_messages (conversation_id, role, content) "
-                "VALUES (:cid, :role, :content)"
-            ),
-            {"cid": conversation_id, "role": role, "content": content[:50000]},
-        )
+    async def _save_message(self, conversation_id: int, role: str, content: str):
+        await bridge.post(bridge.db_service, f"/conversations/{conversation_id}/messages", json={
+            "role": role,
+            "content": content[:50000],
+        })
 
-    async def _load_history(self, db: AsyncSession, conversation_id: int, limit: int = 20) -> list:
-        result = await db.execute(
-            text(
-                "SELECT role, content FROM agent_messages "
-                "WHERE conversation_id = :cid ORDER BY id DESC LIMIT :lim"
-            ),
-            {"cid": conversation_id, "lim": limit},
+    async def _load_history(self, conversation_id: int, limit: int = 20) -> list:
+        messages = await bridge.get(
+            bridge.db_service, f"/conversations/{conversation_id}/messages",
         )
-        rows = result.mappings().all()
-        return [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
+        if not isinstance(messages, list):
+            return []
+        return [{"role": m["role"], "content": m["content"]} for m in messages[-limit:]]

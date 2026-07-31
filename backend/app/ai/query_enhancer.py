@@ -1,15 +1,13 @@
 """Query Enhancer — prepares enriched context before AgentRunner.
 
-Retrieves relevant memories, recent conversation summaries, and organization
-context to provide a richer system prompt. Does NOT classify intent, replace
-agents, orchestrate, or redesign routing.
+Retrieves relevant memories from MySQL, recent conversation summaries, and
+organization context to provide a richer system prompt. Does NOT classify
+intent, replace agents, orchestrate, or redesign routing.
 """
 import logging
 
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.ai.memory import retrieve_memory
+from app.services.java_bridge import bridge
 
 logger = logging.getLogger("stratroom.ai.enhancer")
 
@@ -18,7 +16,6 @@ MAX_RECENT_MESSAGES_PER_CONV = 3
 
 
 async def enhance_context(
-    db: AsyncSession,
     *,
     agent_name: str,
     user_id: int | None,
@@ -29,8 +26,8 @@ async def enhance_context(
     """Build an enriched context block to prepend to the system prompt.
 
     Combines:
-      1. Relevant long-term memories
-      2. Recent conversation summaries (from this agent)
+      1. Relevant long-term memories (MySQL ai_memory)
+      2. Recent conversation summaries (MySQL agent_conversations)
       3. Organization context hint
 
     Returns empty string on failure — agents continue without enhancement.
@@ -39,7 +36,7 @@ async def enhance_context(
 
     # 1. Long-term memories
     memories = await retrieve_memory(
-        db, user_id=user_id, org_id=org_id, agent_name=agent_name, limit=8,
+        user_id=user_id, org_id=org_id, agent_name=agent_name, limit=8,
     )
     if memories:
         mem_lines = []
@@ -51,7 +48,7 @@ async def enhance_context(
         )
 
     # 2. Recent conversation summaries (other conversations for this agent)
-    recent = await _recent_conversation_summaries(db, agent_name, user_id, conversation_id)
+    recent = await _recent_conversation_summaries(agent_name, user_id, conversation_id)
     if recent:
         sections.append(
             "--- RECENT CONVERSATIONS ---\n" + "\n".join(recent)
@@ -65,52 +62,45 @@ async def enhance_context(
 
 
 async def _recent_conversation_summaries(
-    db: AsyncSession,
     agent_name: str,
     user_id: int | None,
     exclude_conversation_id: int | None = None,
 ) -> list[str]:
-    """Fetch summaries of recent conversations for this user+agent."""
+    """Fetch summaries of recent conversations for this user+agent from MySQL."""
     try:
-        async with db.begin_nested():
-            params: dict = {"agent": agent_name, "lim": MAX_RECENT_CONVERSATIONS}
+        params_list = [agent_name]
+        query = (
+            "SELECT c.id, c.title, c.created_at "
+            "FROM agent_conversations c "
+            "WHERE c.agent_name = %s "
+        )
+        if user_id:
+            query += "AND c.user_id = %s "
+            params_list.append(user_id)
+        if exclude_conversation_id:
+            query += "AND c.id != %s "
+            params_list.append(exclude_conversation_id)
+        query += "ORDER BY c.created_at DESC LIMIT %s"
+        params_list.append(MAX_RECENT_CONVERSATIONS)
 
-            query = (
-                "SELECT c.id, c.title, c.created_at "
-                "FROM agent_conversations c "
-                "WHERE c.agent_name = :agent "
+        convos = await bridge._mysql(query, tuple(params_list))
+
+        summaries = []
+        for conv in convos:
+            msgs = await bridge._mysql(
+                "SELECT role, content FROM agent_messages "
+                "WHERE conversation_id = %s ORDER BY id DESC LIMIT %s",
+                (conv["id"], MAX_RECENT_MESSAGES_PER_CONV),
             )
-            if user_id:
-                query += "AND c.user_id = :uid "
-                params["uid"] = user_id
-            if exclude_conversation_id:
-                query += "AND c.id != :excl "
-                params["excl"] = exclude_conversation_id
-            query += "ORDER BY c.created_at DESC LIMIT :lim"
-            params["lim"] = MAX_RECENT_CONVERSATIONS
-
-            result = await db.execute(text(query), params)
-            convos = result.mappings().all()
-
-            summaries = []
-            for conv in convos:
-                msg_result = await db.execute(
-                    text(
-                        "SELECT role, content FROM agent_messages "
-                        "WHERE conversation_id = :cid ORDER BY id DESC LIMIT :lim"
-                    ),
-                    {"cid": conv["id"], "lim": MAX_RECENT_MESSAGES_PER_CONV},
+            if msgs:
+                snippet_parts = []
+                for msg in reversed(msgs):
+                    prefix = "User" if msg["role"] == "user" else "Agent"
+                    snippet_parts.append(f"{prefix}: {msg['content'][:150]}")
+                summaries.append(
+                    f"[{conv['title'] or 'Chat'}]: " + " | ".join(snippet_parts)
                 )
-                msgs = msg_result.mappings().all()
-                if msgs:
-                    snippet_parts = []
-                    for msg in reversed(msgs):
-                        prefix = "User" if msg["role"] == "user" else "Agent"
-                        snippet_parts.append(f"{prefix}: {msg['content'][:150]}")
-                    summaries.append(
-                        f"[{conv['title'] or 'Chat'}]: " + " | ".join(snippet_parts)
-                    )
-            return summaries
+        return summaries
     except Exception:
         logger.exception("Failed to fetch recent conversation summaries")
         return []

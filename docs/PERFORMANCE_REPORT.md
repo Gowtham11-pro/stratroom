@@ -1,6 +1,13 @@
 # Phase 5 Performance Report
 
-**Date:** 2026-07-20
+**Date:** 2026-07-20 (updated 2026-07-31 — current state)
+
+> **Current-state note (2026-07-31):** This is a historical Phase 5 report. Since it was written,
+> PostgreSQL was removed (July 2026) and all data moved to MySQL via `java_bridge._mysql()`
+> (pymysql). The dashboard query consolidation (§1) is still in effect but now runs against MySQL.
+> `core/db.py` (§2) retains the pool config for a degraded PostgreSQL session factory that yields
+> `None` when PG is down — the real database is MySQL. The PgBouncer recommendation (§5) is no
+> longer applicable.
 
 ---
 
@@ -25,6 +32,10 @@
 - `pool_recycle=1800` — recycle connections every 30 minutes
 - `pool_pre_ping=True` — test connection health before use
 **Impact:** Prevents connection leaks, handles DB restarts gracefully, bounded memory usage.
+
+> **2026-07-31:** This pool now backs the **degraded PostgreSQL session factory only** (yields `None`
+> when PG is unavailable). Production data I/O is MySQL via `java_bridge._mysql()` (pymysql with
+> per-call connections); the PostgreSQL pool config is retained for backward compatibility.
 
 ### 3. Async Engine Configuration
 - `expire_on_commit=False` already set (prevents lazy-load issues)
@@ -72,7 +83,7 @@
 ## Recommendations for Future Scaling
 
 1. **Multi-instance deployment**: Add Redis for rate limiting and session state
-2. **Database read replicas**: For high-read dashboards
+2. **Database read replicas**: For high-read dashboards (now MySQL — consider MySQL replicas)
 3. **Background task queue**: For LLM summarization (currently synchronous)
 4. **CDN**: If serving external users
-5. **Connection pooling external**: PgBouncer for >100 concurrent connections
+5. **Connection pooling external**: ~~PgBouncer~~ (PostgreSQL removed) — if MySQL concurrency grows, add a MySQL connection pooler (e.g. ProxySQL) for >100 concurrent connections

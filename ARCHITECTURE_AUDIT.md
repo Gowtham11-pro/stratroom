@@ -1,8 +1,15 @@
 # Architecture Audit — Complete System
 
 **Auditor:** Principal Software Architect
-**Date:** 2026-07-22
+**Date:** 2026-07-26 (updated 2026-07-31 — current state)
 **Scope:** Complete codebase including RBAC and enterprise security hardening
+
+> **Current-state note (2026-07-31):** PostgreSQL was **removed in July 2026**. All data now lives in
+> MySQL (`orgstructure`) reached via `java_bridge._mysql()` (pymysql) and the Java service proxies.
+> The v1 + bare + compat route split described below is unchanged. The frontend is served by FastAPI's
+> `serve_frontend()` from the container path `/app/frontend/31may_index.html` (Apache doc root is not
+> the served copy). `JWT_SECRET` is a static 64-char hex in production. Session-expiry handling was
+> added to the SPA and verified (see below).
 
 ---
 
@@ -11,8 +18,8 @@
 | Metric | Count |
 |--------|-------|
 | Python modules | 34 |
-| API routers | 20 |
-| API endpoints | 70+ |
+| API routers | 26 |
+| API endpoints | 116 (22 v1 + 94 legacy) |
 | AI agents | 10 |
 | ML tools | 6 |
 | SQL migrations | 9 |
@@ -58,10 +65,10 @@
 - **Ownership in UPDATE**: `AND user_id = :uid` prevents cross-user edits
 
 ### API Security
-- **JWT auth**: HS256 with ephemeral secret
+- **JWT auth**: HS256 with static 64-char secret in production (auto-gen fallback → tokens die on restart)
 - **Bearer tokens**: Authorization header only (no URL tokens)
 - **Input validation**: Pydantic models with field validators
-- **Rate limiting**: Sliding window per IP
+- **Rate limiting**: Sliding window per IP (in-memory, per-process — `--workers 1`)
 - **Security headers**: HSTS, CSP, X-Frame-Options, etc.
 - **SSRF protection**: AI provider URLs hardcoded
 
@@ -101,6 +108,11 @@
 
 ---
 
+### v1 API Router
+| Module | RBAC | Endpoints | Note |
+|--------|------|-----------|------|
+| api_v1 | ✅ | 22 endpoints | Added July 2026. All `/api/v1/` routes: auth, chat, dashboard, org, incidents, audit, meetings, initiatives, risks, sessions, tasks, AI insights |
+
 ## Frontend Modules (20 Total)
 
 | # | Module | Hydration | CRUD | RBAC Buttons |
@@ -128,20 +140,28 @@
 
 ---
 
-## Data Model
+## Data Model (MySQL — as of 2026-07-31)
 
-### Domain 1: Application Data (PostgreSQL)
-- users, organizations, org_members
-- tasks, scorecards, risks, incidents
-- audit_findings, complaints, budgets
-- meetings, documents, compliance
-- swot_entries, pestel_entries, initiatives
-- agent_conversations, agent_messages, agent_runs
-- ai_memory, incident_investigations
+PostgreSQL was **removed** in July 2026. The MySQL database (`orgstructure`) is the single data store,
+reached via `java_bridge._mysql()` (direct pymysql) or the Java service HTTP proxies. `db.py` retains a
+PostgreSQL session factory for backward compatibility but yields `None` when PG is unavailable.
 
-### Domain 2: Enterprise Data (MySQL → PostgreSQL)
-- incidents, budgets, meetings, compliance
-- Imported from enterprise systems
+### Application Data (MySQL)
+- users, organizations, org_members (empty — tree uses `employee_details.parent_emp_id`)
+- employee_details, user_role_management (designation → RBAC mapping)
+- tasks, risks, incidents, audit_findings, complaints, budgets (budget_detail), meetings (meeting_management), compliance (compliance_details)
+- score_card (108 scorecard-definition rows), scorecard_kpis (408 KPI-value rows — replaces PG `scorecards`)
+- initiatives (initiatives_details), swot_analysis, pestel_analysis, universal_incident, project_planning
+- agent_conversations, agent_messages, ai_agent_runs, ai_memory (AI tables moved to MySQL)
+
+### Enterprise Data (MySQL → JavaBridge)
+- incidents, budgets, meetings, compliance, processenabler
+- Imported from enterprise systems; exposed via the 19 `/stratroom/*` compat routes
+
+## Frontend Serving Path
+- Apache vhost `:8088` does `ProxyPass / http://localhost:8001/` — **all** traffic (incl. `/`) goes to FastAPI.
+- FastAPI `serve_frontend()` (`backend/app/main.py:212`) serves the container's `/app/frontend/31may_index.html` (1.5MB single-file SPA). The Apache doc root copy is **not** served.
+- SPA has dual data-loading: `load*Data()` (compat) vs `hydrate*Page()` (bare routes); an interceptor blocks the legacy path for authenticated users on 13 modules. Two legacy bypasses (`budgetAPI.init()`, `refreshDashboardKPIs()`) are gated with `isTokenValid()` + `API_TOKEN` checks.
 
 ---
 
@@ -162,7 +182,7 @@
 1. **ORM migration**: Convert raw SQL to SQLAlchemy models
 2. **Integration test suite**: Add pytest + testcontainers
 3. **API versioning**: Add `/api/v1/` prefix
-4. **Automated backups**: Cron-based pg_dump
+4. **Automated backups**: Cron-based MySQL dumps (`mysqldump` of `orgstructure`)
 5. **APM integration**: OpenTelemetry for tracing
 6. **Frontend refactor**: Consider component framework
 7. **Request ID propagation**: Forward correlation IDs to LLM providers

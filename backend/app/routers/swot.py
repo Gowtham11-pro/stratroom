@@ -1,14 +1,23 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.db import get_db
+
 from app.core.deps import require_role
 from app.core.config import settings
+from app.services.java_bridge import bridge
+
+logger = logging.getLogger("stratroom.swot")
 
 router = APIRouter(tags=["swot"])
 
 VALID_QUADRANTS = {"strength", "weakness", "opportunity", "threat"}
+PG_TO_MYSQL_QUADRANT = {
+    "strength": "Strengths",
+    "weakness": "Weaknesses",
+    "opportunity": "Oppurtunities",
+    "threat": "Threats",
+}
 
 
 class SwotItemCreate(BaseModel):
@@ -20,7 +29,7 @@ class SwotItemCreate(BaseModel):
     def validate_quadrant(cls, v: str) -> str:
         v = v.strip().lower()
         if v not in VALID_QUADRANTS:
-            raise ValueError(f"Invalid quadrant: {v}. Must be one of: {', '.join(sorted(VALID_QUADRANTS))}")
+            raise ValueError(f"Invalid quadrant: {v}")
         return v
 
     @field_validator("content")
@@ -36,50 +45,53 @@ class SwotItemCreate(BaseModel):
 
 @router.get("/swot")
 async def list_swot_items(
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
     org_id = ctx["org_id"]
-    result = await db.execute(
-        text("SELECT id, quadrant, content, sort_order FROM swot_items WHERE org_id = :oid ORDER BY CASE quadrant WHEN 'strength' THEN 1 WHEN 'weakness' THEN 2 WHEN 'opportunity' THEN 3 WHEN 'threat' THEN 4 END, sort_order"),
-        {"oid": org_id},
-    )
-    rows = result.mappings().all()
-    return {"items": [dict(r) for r in rows]}
+    try:
+        data = await bridge.get(bridge.db_service, "/swotList")
+        rows = data if isinstance(data, list) else data.get("items", data.get("list", []))
+        quadrant_order = {"strength": 1, "weakness": 2, "opportunity": 3, "threat": 4}
+        items = []
+        for r in rows:
+            q = (r.get("quadrant") or "").lower()
+            items.append({
+                "id": r.get("id"),
+                "quadrant": q,
+                "content": r.get("content") or "",
+                "sort_order": quadrant_order.get(q, 5),
+            })
+        items.sort(key=lambda x: (quadrant_order.get(x["quadrant"], 5), x["sort_order"]))
+    except Exception as exc:
+        logger.warning("Failed to query SWOT via bridge: %s", exc)
+        items = []
+    return {"items": items}
 
 
 @router.post("/swot")
 async def add_swot_item(
     payload: SwotItemCreate,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("manager")),
 ):
-    org_id = ctx["org_id"]
-    result = await db.execute(
-        text("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM swot_items WHERE org_id = :oid AND quadrant = :q"),
-        {"oid": org_id, "q": payload.quadrant},
-    )
-    next_order = result.scalar()
-    await db.execute(
-        text("INSERT INTO swot_items (org_id, quadrant, content, sort_order) VALUES (:oid, :q, :c, :o)"),
-        {"oid": org_id, "q": payload.quadrant, "c": payload.content, "o": next_order},
-    )
-    await db.commit()
+    emp_id = ctx.get("user_id")
+    mysql_quadrant = PG_TO_MYSQL_QUADRANT.get(payload.quadrant, payload.quadrant.capitalize())
+    await bridge.post(bridge.db_service, "/swotList", json={
+        "name": payload.content,
+        "active": 1,
+        "owner": emp_id,
+        "page_id": 0,
+        "flag_type": mysql_quadrant,
+    })
     return {"ok": True}
 
 
 @router.delete("/swot/{item_id}")
 async def delete_swot_item(
     item_id: int,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("admin")),
 ):
-    org_id = ctx["org_id"]
-    result = await db.execute(
-        text("DELETE FROM swot_items WHERE id = :id AND org_id = :oid"),
-        {"id": item_id, "oid": org_id},
-    )
-    if result.rowcount == 0:
+    try:
+        await bridge.delete(bridge.db_service, f"/swotList/{item_id}")
+    except Exception:
         raise HTTPException(status_code=404, detail="SWOT item not found")
-    await db.commit()
     return {"ok": True}

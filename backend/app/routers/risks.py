@@ -1,11 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
-from app.core.db import get_db
 from app.core.deps import require_role
+from app.services.java_bridge import bridge
 
 router = APIRouter(prefix="/risks", tags=["risks"])
 
@@ -33,140 +31,81 @@ class RiskUpdate(BaseModel):
 
 
 @router.get("")
-async def list_risks(
-    db: AsyncSession = Depends(get_db),
-    ctx: dict = Depends(require_role("member")),
-):
-    user_id = ctx["user_id"]
-    org_id = ctx["org_id"]
+async def list_risks(ctx: dict = Depends(require_role("member"))):
+    emp_id = ctx["user_id"]
     is_admin = ctx["is_admin"]
     is_manager = ctx["is_manager"]
 
     if is_admin or is_manager:
-        result = await db.execute(
-            text(
-                "SELECT id, name, owner, inherent_likelihood, inherent_impact, "
-                "residual_likelihood, residual_impact, description, mitigation "
-                "FROM risks WHERE org_id = :oid ORDER BY created_at DESC"
-            ),
-            {"oid": org_id},
-        )
+        data = await bridge.get(bridge.db_service, "/riskListView")
     else:
-        result = await db.execute(
-            text(
-                "SELECT id, name, owner, inherent_likelihood, inherent_impact, "
-                "residual_likelihood, residual_impact, description, mitigation "
-                "FROM risks WHERE org_id = :oid AND owner = :owner ORDER BY created_at DESC"
-            ),
-            {"oid": org_id, "owner": ctx["email"]},
-        )
-    rows = result.mappings().all()
-    return {"risks": [dict(r) for r in rows]}
+        data = await bridge.get(bridge.db_service, f"/riskList/{emp_id}")
+
+    rows = data if isinstance(data, list) else data.get("risk", data.get("risks", []))
+    return {"risks": rows}
 
 
 @router.post("", status_code=201)
 async def create_risk(
     payload: RiskCreate,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("manager")),
 ):
-    org_id = ctx["org_id"]
-    result = await db.execute(
-        text(
-            "INSERT INTO risks (org_id, name, owner, description, mitigation, "
-            "inherent_likelihood, inherent_impact, residual_likelihood, residual_impact) "
-            "VALUES (:oid, :name, :owner, :desc, :mit, :il, :ii, :rl, :ri) RETURNING id"
-        ),
-        {
-            "oid": org_id,
-            "name": payload.name,
-            "owner": payload.owner,
-            "desc": payload.description,
-            "mit": payload.mitigation,
-            "il": payload.inherent_likelihood,
-            "ii": payload.inherent_impact,
-            "rl": payload.residual_likelihood,
-            "ri": payload.residual_impact,
-        },
-    )
-    row = result.mappings().first()
-    await db.commit()
-    return {"id": row["id"], "ok": True}
+    body = {
+        "riskName": payload.name,
+        "owner": payload.owner or ctx["email"],
+        "description": payload.description,
+        "mitigation": payload.mitigation,
+        "inherentLikelihood": payload.inherent_likelihood,
+        "inherentImpact": payload.inherent_impact,
+        "residualLikelihood": payload.residual_likelihood,
+        "residualImpact": payload.residual_impact,
+        "empId": ctx["user_id"],
+        "orgId": ctx["org_id"],
+    }
+    result = await bridge.post(bridge.db_service, "/risk", json=body)
+    return {"id": result.get("id"), "ok": True}
 
 
 @router.put("/{risk_id}")
 async def update_risk(
     risk_id: int,
     payload: RiskUpdate,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    org_id = ctx["org_id"]
-    is_admin = ctx["is_admin"]
-
-    ownership = await db.execute(
-        text("SELECT id, owner FROM risks WHERE id = :rid AND org_id = :oid"),
-        {"rid": risk_id, "oid": org_id},
-    )
-    risk = ownership.mappings().first()
-    if not risk:
+    existing = await bridge.get(bridge.db_service, f"/risk/{risk_id}")
+    if not existing:
         raise HTTPException(status_code=404, detail="Risk not found")
 
-    if not is_admin and risk["owner"] != ctx["email"]:
-        raise HTTPException(status_code=403, detail="You can only update your own risks")
-
-    updates = {}
+    body = {"id": risk_id, "empId": ctx["user_id"], "orgId": ctx["org_id"]}
     if payload.name is not None:
-        updates["name"] = payload.name
+        body["riskName"] = payload.name
     if payload.owner is not None:
-        updates["owner"] = payload.owner
+        body["owner"] = payload.owner
     if payload.description is not None:
-        updates["description"] = payload.description
+        body["description"] = payload.description
     if payload.mitigation is not None:
-        updates["mitigation"] = payload.mitigation
+        body["mitigation"] = payload.mitigation
     if payload.inherent_likelihood is not None:
-        updates["inherent_likelihood"] = payload.inherent_likelihood
+        body["inherentLikelihood"] = payload.inherent_likelihood
     if payload.inherent_impact is not None:
-        updates["inherent_impact"] = payload.inherent_impact
+        body["inherentImpact"] = payload.inherent_impact
     if payload.residual_likelihood is not None:
-        updates["residual_likelihood"] = payload.residual_likelihood
+        body["residualLikelihood"] = payload.residual_likelihood
     if payload.residual_impact is not None:
-        updates["residual_impact"] = payload.residual_impact
+        body["residualImpact"] = payload.residual_impact
 
-    if not updates:
-        raise HTTPException(status_code=400, detail="No fields to update")
-
-    set_clause = ", ".join(f"{k} = :{k}" for k in updates)
-    updates["rid"] = risk_id
-    updates["oid"] = org_id
-
-    await db.execute(
-        text(f"UPDATE risks SET {set_clause} WHERE id = :rid AND org_id = :oid"),
-        updates,
-    )
-    await db.commit()
+    await bridge.put(bridge.db_service, "/risk", json=body)
     return {"ok": True}
 
 
 @router.delete("/{risk_id}")
 async def delete_risk(
     risk_id: int,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("admin")),
 ):
-    org_id = ctx["org_id"]
-
-    ownership = await db.execute(
-        text("SELECT id FROM risks WHERE id = :rid AND org_id = :oid"),
-        {"rid": risk_id, "oid": org_id},
-    )
-    risk = ownership.mappings().first()
-    if not risk:
+    existing = await bridge.get(bridge.db_service, f"/risk/{risk_id}")
+    if not existing:
         raise HTTPException(status_code=404, detail="Risk not found")
 
-    await db.execute(
-        text("DELETE FROM risks WHERE id = :rid AND org_id = :oid"),
-        {"rid": risk_id, "oid": org_id},
-    )
-    await db.commit()
+    await bridge.delete(bridge.db_service, f"/risk/{risk_id}")
     return {"ok": True}

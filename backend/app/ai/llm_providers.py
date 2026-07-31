@@ -58,6 +58,35 @@ _RETRYABLE_ERRORS = (
 )
 
 
+def _extract_provider_error(resp: httpx.Response, provider: str, model: str) -> ValueError:
+    """Build a clear, non-retryable error from a provider rejection.
+
+    Permanent client errors (e.g. an unavailable/deprecated model) should be
+    surfaced to the caller immediately instead of being retried and hidden
+    behind a generic 502.
+    """
+    detail = ""
+    try:
+        data = resp.json()
+        err = data.get("error") if isinstance(data, dict) else None
+        if isinstance(err, dict):
+            detail = err.get("message") or ""
+        elif isinstance(err, str):
+            detail = err
+    except Exception:
+        pass
+    if not detail:
+        detail = resp.text[:200]
+
+    msg = (
+        f"Configured model '{model}' was rejected by provider '{provider}' "
+        f"(HTTP {resp.status_code})."
+    )
+    if detail:
+        msg += f" Provider response: {detail}"
+    return ValueError(msg)
+
+
 async def call_llm(
     provider: str,
     api_key: str,
@@ -85,6 +114,8 @@ async def call_llm(
     """
     provider = provider.lower()
 
+    if provider == "mock":
+        return "Mock response. This is a simulated LLM reply for testing purposes. The agent system is functioning correctly through the full HTTP path."
     if provider == "anthropic":
         return await _call_anthropic(api_key, model, system_prompt, messages, max_tokens, base_url)
     elif provider == "google":
@@ -157,7 +188,10 @@ async def _call_openai_compatible(
 
     client = _get_client(provider)
     resp = await client.post(url, json=body, headers=headers)
-    resp.raise_for_status()
+    if resp.status_code >= 400:
+        if resp.status_code == 429 or resp.status_code >= 500:
+            resp.raise_for_status()
+        raise _extract_provider_error(resp, provider, model)
     data = resp.json()
     return data["choices"][0]["message"]["content"]
 

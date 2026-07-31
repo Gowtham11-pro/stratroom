@@ -3,7 +3,15 @@ did# StratRoom — Enterprise AI Architecture Design Document
 **Version:** 2.0 (Revised — Critical Self-Review Applied)  
 **Date:** 2026-07-20  
 **Classification:** Internal — Architecture Design  
-**Status:** DESIGN ONLY — No implementation  
+**Status:** ✅ **IMPLEMENTED** (was "DESIGN ONLY" — Phase 3 delivered July 2026)
+
+> **Implementation status (2026-07-31):** This v2.0 design was implemented as specified.
+> - `backend/app/ai/` module built: `llm_providers.py`, `tool_registry.py`, `memory.py`, `query_enhancer.py`, `guardrails.py`, `metrics.py`
+> - Executive agent added → **10 agents** total (see §7.3 `AGENT_MODULE_MAP` + `prompts.py`)
+> - 6 ML tool endpoints live (`/ml/risk|revenue|attrition|incidents|budget|forecast`)
+> - `ai_memory`, `ai_agent_runs`, `agent_conversations`, `agent_messages` tables created (on **MySQL** — PostgreSQL was removed July 2026; §14's `SERIAL`/`TIMESTAMPTZ` DDL is the design, the MySQL equivalent is what's deployed)
+> - Pre-existing bugs (§3, §17.1) fixed: user_id resolved from email, org_id scoping added, content-length truncation applied
+> - Migration plan §17 executed; 10 agents = 9 original + 1 new executive agent
 
 ---
 
@@ -69,14 +77,14 @@ StratRoom currently operates with a flat, single-agent architecture: 9 domain ag
 ### 2.1 System Inventory
 
 ```
-Frontend:      31may_index.html (1.3MB single-page app)
-Auth:          JWT (HS256) + bcrypt, Bearer token
-API:           19 FastAPI routers (40+ endpoints)
-Database:      PostgreSQL 16 (17 tables, async SQLAlchemy)
-ML Models:     5 XGBoost models (.joblib) — risk, revenue, attrition, incidents, budget
-AI Agents:     9 domain agents (flat, independent)
-Infrastructure: Docker Compose (api + db)
-Tests:         106 passing
+Frontend:      31may_index.html (1.5MB single-page app)
+Auth:          JWT (HS256) + bcrypt, Bearer token (passwordless v1 login also available)
+API:           26 FastAPI routers (116 endpoints) — incl. /stratroom/* compat + bare MySQL routes
+Database:      MySQL (orgstructure) via JavaBridge — PostgreSQL removed July 2026
+ML Models:     6 XGBoost endpoints — risk, revenue, attrition, incidents, budget, forecast
+AI Agents:     10 domain agents (9 + executive), tool calling, memory, metrics
+Infrastructure: Docker Compose (api container) + Apache proxy :8088
+Tests:         128+ passing
 ```
 
 ### 2.2 Database Schema (17 Tables)
@@ -753,6 +761,11 @@ ML_TOOLS = {
 ## 14. Database Strategy
 
 ### 14.1 New Tables (Additive Only)
+
+> **Deployed on MySQL (2026-07-31):** PostgreSQL was removed; the design DDL below is the historical
+> reference. The deployed equivalents (`ai_memory`, `ai_agent_runs`, plus the migrated
+> `agent_conversations`/`agent_messages`) use MySQL types (`INT AUTO_INCREMENT PRIMARY KEY`,
+> `DATETIME DEFAULT CURRENT_TIMESTAMP`) and live in the `orgstructure` schema.
 
 ```sql
 -- Table 1: Agent memory (accumulated insights)

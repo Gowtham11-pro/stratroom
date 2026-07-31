@@ -1,18 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
-from sqlalchemy import text
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.core.deps import get_current_user
 from app.core.security import (
     create_access_token,
-    hash_password,
     validate_email,
     validate_password_strength,
-    verify_password,
 )
-from app.core.utils import resolve_full_identity
+from app.core.rbac import resolve_rbac_role
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -73,14 +71,6 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
-class UserProfile(BaseModel):
-    id: int
-    org_id: int
-    email: str
-    full_name: str
-    role: str
-
-
 class EmployeeInfo(BaseModel):
     emp_id: int | None = None
     full_name: str | None = None
@@ -104,59 +94,63 @@ class UserProfileExtended(BaseModel):
 
 
 @router.post("/register", response_model=TokenResponse)
-async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    existing = await db.execute(
-        text("SELECT id FROM users WHERE email = :email"), {"email": payload.email}
+async def register(payload: RegisterRequest):
+    from app.core.security import hash_password
+    from app.services.java_bridge import bridge
+
+    existing = await bridge._mysql(
+        "SELECT id FROM users WHERE LOWER(email) = %s",
+        (payload.email.lower(),),
     )
-    if existing.first():
+    if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
     if payload.org_id:
-        org_check = await db.execute(
-            text("SELECT id FROM organizations WHERE id = :oid"), {"oid": payload.org_id}
+        org_rows = await bridge._mysql(
+            "SELECT id FROM organizations WHERE id = %s", (payload.org_id,)
         )
-        if not org_check.first():
+        if not org_rows:
             raise HTTPException(status_code=400, detail="Organization not found")
         org_id = payload.org_id
     else:
-        org = await db.execute(text("SELECT id FROM organizations LIMIT 1"))
-        org_id = org.scalar_one_or_none()
+        org_rows = await bridge._mysql(
+            "SELECT id FROM organizations ORDER BY id LIMIT 1"
+        )
+        org_id = org_rows[0]["id"] if org_rows else None
         if org_id is None:
             raise HTTPException(status_code=500, detail="No organization found. Contact administrator.")
 
     hashed = hash_password(payload.password)
-    await db.execute(
-        text(
-            "INSERT INTO users (org_id, email, hashed_password, full_name, role) "
-            "VALUES (:org_id, :email, :hashed, :full_name, :role)"
-        ),
-        {
-            "org_id": org_id,
-            "email": payload.email,
-            "hashed": hashed,
-            "full_name": payload.full_name.strip() if payload.full_name else "",
-            "role": payload.role,
-        },
+    await bridge._mysql_write(
+        "INSERT INTO users (org_id, email, hashed_password, full_name, role) "
+        "VALUES (%s, %s, %s, %s, %s)",
+        (org_id, payload.email, hashed, payload.full_name.strip() if payload.full_name else "", payload.role),
     )
-    await db.commit()
     return TokenResponse(access_token=create_access_token(payload.email))
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        text("SELECT hashed_password FROM users WHERE email = :email"),
-        {"email": payload.email},
+async def login(payload: LoginRequest):
+    from app.core.security import verify_password
+    from app.services.java_bridge import bridge
+
+    rows = await bridge._mysql(
+        "SELECT hashed_password FROM users WHERE LOWER(email) = %s",
+        (payload.email.lower(),),
     )
-    row = result.first()
-    if not row or not verify_password(payload.password, row[0]):
+    if not rows or not verify_password(payload.password, rows[0]["hashed_password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     return TokenResponse(access_token=create_access_token(payload.email))
 
 
 @router.get("/me", response_model=UserProfileExtended)
-async def get_me(db: AsyncSession = Depends(get_db), user: str = Depends(get_current_user)):
-    identity = await resolve_full_identity(db, user)
+async def get_me(
+    user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.core.utils import resolve_full_identity
+
+    identity = await resolve_full_identity(user, db)
     if not identity:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -177,7 +171,7 @@ async def get_me(db: AsyncSession = Depends(get_db), user: str = Depends(get_cur
         org_id=identity["org_id"],
         email=identity["email"],
         full_name=identity.get("full_name") or "",
-        role=identity.get("app_role") or "member",
+        role=resolve_rbac_role(identity),
         designation=identity.get("designation"),
         department=identity.get("department"),
         location=identity.get("location"),

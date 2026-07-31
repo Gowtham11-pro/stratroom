@@ -1,0 +1,56 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    container_name: stratroom_new_api
+    restart: unless-stopped
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:8002}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_JSON_MODE: ${LOG_JSON_MODE:-true}
+      ENABLE_DOCS: ${ENABLE_DOCS:-false}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-120}
+      APP_VERSION: ${APP_VERSION:-2.0.0}
+      MYSQL_HOST: ${MYSQL_HOST:-host.docker.internal}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
+      MYSQL_USER: ${MYSQL_USER:-root}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-Admin#123}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-orgstructure}
+      JAVA_AUTH_URL: ${JAVA_AUTH_URL:-http://host.docker.internal:9010}
+      JAVA_DB_URL: ${JAVA_DB_URL:-http://host.docker.internal:9040}
+      JAVA_USER_URL: ${JAVA_USER_URL:-http://host.docker.internal:9050}
+      JAVA_SCORECARD_URL: ${JAVA_SCORECARD_URL:-http://host.docker.internal:9060}
+    ports:
+      - "${API_PORT:-8002}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "2.0"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - stratroom_new
+
+networks:
+  stratroom_new:
+    driver: bridge
+
+volumes:
+

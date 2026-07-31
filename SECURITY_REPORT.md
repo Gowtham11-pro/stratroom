@@ -1,8 +1,16 @@
 # Security Report — Enterprise Security Audit
 
 **Auditor:** Principal Software Architect
-**Date:** 2026-07-22
+**Date:** 2026-07-22 (updated 2026-07-31 — current state)
 **Scope:** Full backend + frontend, OWASP Top 10 review, RBAC enforcement
+
+> **Current-state note (2026-07-31):** All findings below remain valid. Since this audit,
+> PostgreSQL was fully removed (July 2026) — all application/enterprise data now lives in MySQL
+> (`orgstructure`) reached via `java_bridge._mysql()`/Java service proxies. Parameterized queries use
+> MySQL `%s` placeholders. Auth is dual-path: passwordless `POST /api/v1/auth/login` (email only) and
+> password-verified `POST /auth/login` (bcrypt against MySQL `users.hashed_password`). The "ephemeral
+> JWT secret" risk below is **resolved in production** by a static 64-char `JWT_SECRET`. A frontend
+> session-expiry fix (stale-token 401 wall) was also shipped and verified (see final section).
 
 ---
 
@@ -63,16 +71,29 @@ StratRoom implements defense-in-depth security with org_id scoping, RBAC enforce
 **Issue:** Old localStorage data persisted after login
 **Fix:** Login purges stale keys before loading new user data
 
+### 10. Stale-Session / Expired-Token Error Wall (2026-07-31)
+**File:** `31may_index.html`
+**Issue:** Expired JWT on page load fired data requests → 401/403 walls, stale cached role UI ("Role & Prompts active: admin"), no recovery to login
+**Fix:** Added `isTokenValid()` (reads `sr_backend_token`), `handleSessionExpired()` (purges all auth keys, shows `#login-screen`), 401 branches in `authFetch`/`apiGet`/`apiRequest`, and presence-guards on data-loading call sites — including the two interceptor bypasses `budgetAPI.init()` + `refreshDashboardKPIs()`. Verified: expired-token load performs **0 data requests** and lands on the login screen.
+
 ---
 
 ## RBAC Security Architecture
 
 ### Authentication Flow
+Two live login paths:
 ```
-Client → POST /auth/login (email + password)
-Server → Validate credentials (bcrypt)
-Server → Create JWT (sub=email, exp=60min)
-Client → Store token in localStorage
+// Path A — Passwordless (v1, used for API/tooling)
+Client → POST /api/v1/auth/login {email}
+Server → Look up email in MySQL users (then JavaBridge userList fallback)
+Server → Create JWT (sub=email, exp=60min default)
+
+// Path B — Password-verified (SPA login form)
+Client → POST /auth/login {email, password}
+Server → bcrypt verify against MySQL users.hashed_password
+Server → Create JWT (sub=email, exp=60min default)
+
+Client → Store token in localStorage (sr_backend_token / stratroom_token)
 Client → Authorization: Bearer <token> on all requests
 ```
 
@@ -92,15 +113,18 @@ Response → Only user's org data returned
 | manager | 50 | View all, create + update own, no delete |
 | member | 10 | View assigned only, update own only |
 
+RBAC role is resolved by `resolve_rbac_role(identity)` in `rbac.py` in priority order: **app_role → designation (`user_role_management`) → enterprise_role**, falling back to `member`.
+
 ### Query Security Pattern
 ```sql
--- BEFORE (insecure): No org filter
-SELECT * FROM tasks WHERE id = :id
-
--- AFTER (secure): Org + ownership scoped
+-- PostgreSQL-era (historical, documented pattern):
 SELECT * FROM tasks WHERE id = :id AND org_id = :oid
-UPDATE tasks SET ... WHERE id = :id AND org_id = :oid AND user_id = :uid
+
+-- MySQL (current — all data on MySQL via java_bridge):
+SELECT * FROM tasks WHERE id = %s AND org_id = %s
+UPDATE tasks SET ... WHERE id = %s AND org_id = %s AND user_id = %s
 ```
+Never use f-strings for SQL on either backend.
 
 ---
 
@@ -108,7 +132,7 @@ UPDATE tasks SET ... WHERE id = :id AND org_id = :oid AND user_id = :uid
 
 | Router | Pattern | Status |
 |--------|---------|--------|
-| All routers | `text("... :param ...")` with bound params | SAFE |
+| All routers | `text("... %s ...")` with bound params (MySQL via `bridge._mysql()`) | SAFE |
 | `ml.py` | `f"SELECT * FROM {table}"` | SAFE (whitelist-guarded) |
 | `dashboard.py` | Parameterized with org_id | SAFE |
 
@@ -160,9 +184,9 @@ UPDATE tasks SET ... WHERE id = :id AND org_id = :oid AND user_id = :uid
 ## Remaining Known Risks (Accepted)
 
 1. **Client-side API keys**: Frontend sends AI provider API keys in request body. Backend cannot encrypt without vault integration.
-2. **In-memory rate limiting**: Not shared across worker processes. Requires Redis for multi-instance.
+2. **In-memory rate limiting**: Not shared across worker processes. Requires Redis for multi-instance. (Container must run `--workers 1`.)
 3. **No request body size limit at middleware**: FastAPI defaults apply. Minimal risk.
-4. **Ephemeral JWT secret**: Regenerated on container restart. Tokens don't survive restarts.
+4. **Ephemeral JWT secret**: ⚠️ **RESOLVED in production** — `JWT_SECRET` is a static 64-char hex env var; tokens survive restarts. (If `JWT_SECRET` is unset anywhere, `config.py` auto-generates an ephemeral secret and tokens die on restart.)
 
 ---
 
@@ -186,6 +210,9 @@ UPDATE tasks SET ... WHERE id = :id AND org_id = :oid AND user_id = :uid
 | Role-based button hiding | ✅ |
 | Logout state clearing | ✅ |
 | Login state purging | ✅ |
+| Expired token on page load → login screen, 0 data requests | ✅ (headless Chrome, 2026-07-31) |
+| Fresh login → only `/`, `/auth/login`, `/auth/me`, `/dashboard/stats` (no 4xx/5xx) | ✅ (headless Chrome) |
+| Mid-session expiry → single 401 → token purged → login screen | ✅ (headless Chrome) |
 
 ---
 

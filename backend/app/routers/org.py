@@ -1,208 +1,150 @@
 import logging
 from collections import defaultdict
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends
 
-from app.core.db import get_db
 from app.core.deps import require_role
+from app.services.java_bridge import bridge
 
 logger = logging.getLogger("stratroom.org")
 
 router = APIRouter(tags=["org"])
 
-# Map MySQL department names to frontend dept keys
-DEPT_MAP = {
-    'ceo': 'exec', 'coo': 'exec', 'board': 'exec',
-    'technology': 'tech', 'tech': 'tech', 'infrastructure': 'tech',
-    'pmo': 'tech', 'inf': 'tech', 'cto': 'tech',
-    'risk': 'risk', 'risk & compliance': 'risk', 'compliance': 'risk', 'audit': 'risk', 'security': 'risk',
-    'finance': 'finance', 'accounting': 'finance', 'budget': 'finance', 'cfo': 'finance',
-    'sales': 'ops', 'marketing': 'ops', 'operations': 'ops', 'supply chain': 'ops', 'cso': 'ops',
+DEPT_SLUG_MAP = {
+    'ceo': 'exec', 'coo': 'exec', 'admin': 'exec', 'board': 'exec',
+    'technology': 'tech', 'tech': 'tech', 'infrastructure': 'tech', 'cto': 'tech',
+    'finance': 'finance', 'accounting': 'finance', 'cfo': 'finance', 'budget': 'finance',
+    'sales': 'ops', 'marketing': 'ops', 'operations': 'ops', 'supply chain': 'ops', 'cso': 'ops', 'cmo': 'ops',
     'hr': 'hr', 'human resources': 'hr', 'people': 'hr', 'talent': 'hr',
+    'risk': 'risk', 'compliance': 'risk', 'audit': 'risk', 'security': 'risk',
     'legal': 'legal', 'strategy': 'legal', 'general counsel': 'legal',
 }
 
 
-def _map_dept(dept_name):
+def _to_slug(dept_name):
     if not dept_name:
         return 'exec'
     key = dept_name.strip().lower()
-    return DEPT_MAP.get(key, 'exec')
+    return DEPT_SLUG_MAP.get(key, 'exec')
 
 
-def _build_tree(members, emp_lookup, struct_lookup):
-    """Build a hierarchical tree from org_structure_details."""
-    by_emp_id = {}
-    roots = []
+async def _resolve_mysql_org_id(email: str) -> int | None:
+    """Resolve the caller's MySQL org_id from their email.
 
-    # Only include employees that have a structure entry
-    for m in members:
-        emp_id = m['emp_id']
-        if emp_id not in struct_lookup:
-            continue
-        node = {
-            'id': str(emp_id),
-            'emp_id': emp_id,
-            'name': m['full_name'] or f"User {emp_id}",
-            'title': m.get('title') or '',
-            'dept': _map_dept(m.get('department')),
-            'region': '',
-            'level': '',
-            'headcount': 1,
-            'children': [],
-            'user_id': None,
-            'email': m.get('email_address'),
-            'role': None,
-        }
-        by_emp_id[emp_id] = node
-
-    # Build parent-child from org_structure_details
-    for emp_id, node in by_emp_id.items():
-        struct = struct_lookup.get(emp_id)
-        if struct:
-            parent_id = struct.get('parent_id')
-            if parent_id and parent_id in by_emp_id:
-                by_emp_id[parent_id]['children'].append(node)
-            else:
-                roots.append(node)
-        else:
-            roots.append(node)
-
-    return roots
+    Returns None if the user has no MySQL employee record (e.g. PG-only
+    admin accounts). Same pattern as query_risks/query_tasks.
+    """
+    if not email:
+        return None
+    try:
+        rows = await bridge._mysql(
+            "SELECT org_id FROM employee_details "
+            "WHERE LOWER(email_address) = LOWER(%s) LIMIT 1",
+            (email,),
+        )
+        if rows:
+            return rows[0].get("org_id")
+    except Exception:
+        logger.debug("Failed to resolve MySQL org_id for %s", email)
+    return None
 
 
 @router.get("/org")
 async def get_org_full(
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    user_id = ctx["user_id"]
-    org_id = ctx["org_id"]
+    email = ctx.get("email", "")
+    mysql_org_id = await _resolve_mysql_org_id(email)
 
-    # ── 1. Fetch employee details for this org ──
-    try:
-        result = await db.execute(
-            text(
-                "SELECT emp_id, org_id, dept_id, first_name, last_name, title, "
-                "parent_emp_id, email_address, department, location, status "
-                "FROM employee_details WHERE org_id = :oid AND (status IS NULL OR status != 'InActive')"
-            ),
-            {"oid": org_id},
-        )
-        emp_rows = [dict(r) for r in result.mappings().all()]
-        for e in emp_rows:
-            fn = (e.get('first_name') or '').strip()
-            ln = (e.get('last_name') or '').strip()
-            e['full_name'] = f"{fn} {ln}".strip() or f"User {e['emp_id']}"
-    except Exception as exc:
-        logger.warning("Failed to query employee_details for org=%s: %s", org_id, exc)
-        emp_rows = []
+    # Fail-safe: no MySQL employee record -> empty result
+    # (e.g. admin@stratroom.com who has pg-only org_id=1)
+    if mysql_org_id is None:
+        return {
+            "tree": {"id": "0", "name": "Organization", "title": "", "dept": "exec",
+                     "region": "", "level": "", "headcount": 0,
+                     "children": [], "user_id": None, "email": None, "role": None},
+            "users": [],
+            "summary": {
+                "total_members": 0, "total_users": 0, "total_headcount": 0,
+                "departments": {}, "regions": {}, "levels": {},
+            },
+        }
 
-    # ── 2. Fetch org structure (reporting hierarchy) - scoped to org employees ──
-    try:
-        result = await db.execute(
-            text(
-                'WITH org_employees AS ('
-                '  SELECT emp_id FROM employee_details '
-                '  WHERE org_id = :oid AND (status IS NULL OR status != \'InActive\')'
-                '), '
-                'latest_struct AS ('
-                '  SELECT DISTINCT ON (empid) empid, parent_id, status '
-                '  FROM org_structure_details '
-                "  WHERE status = 'Active' AND empid IN (SELECT emp_id FROM org_employees) "
-                '  ORDER BY empid, start_date DESC'
-                ') '
-                'SELECT empid, parent_id FROM latest_struct'
-            ),
-            {"oid": org_id},
-        )
-        struct_rows = [dict(r) for r in result.mappings().all()]
-        struct_lookup = {r['empid']: r for r in struct_rows}
-    except Exception as exc:
-        logger.warning("Failed to query org_structure_details: %s", exc)
-        struct_lookup = {}
+    members = await _fetch_employees(mysql_org_id)
+    user_rows_raw = await _fetch_users(mysql_org_id)
 
-    # ── 3. Fetch user role management for user info ──
-    try:
-        result = await db.execute(
-            text(
-                "SELECT emp_id, name, email_address, designation, role, department, location, status "
-                "FROM user_role_management WHERE org_id = :oid AND (status IS NULL OR status != 'InActive')"
-            ),
-            {"oid": org_id},
-        )
-        user_rows = [dict(r) for r in result.mappings().all()]
-    except Exception as exc:
-        logger.warning("Failed to query user_role_management for org=%s: %s", org_id, exc)
-        user_rows = []
-
-    # Build user lookup by emp_id
-    user_by_emp = {r['emp_id']: r for r in user_rows}
-
-    # ── 4. Compute summary stats (needed before tree for virtual root) ──
-    total_members = len(emp_rows)
-    total_users = len(user_rows)
+    total_members = len(members)
+    total_users = len(user_rows_raw)
     total_headcount = total_members
 
     depts = defaultdict(lambda: {"count": 0, "members": 0})
     regions = defaultdict(int)
     levels = defaultdict(int)
 
-    for e in emp_rows:
-        dept_key = _map_dept(e.get('department'))
-        depts[dept_key]["count"] += 1
-        depts[dept_key]["members"] += 1
+    for m in members:
+        slug = _to_slug(m.get("dept"))
+        depts[slug]["count"] += 1
+        depts[slug]["members"] += 1
+        rg = (m.get("region") or "").strip()
+        if rg:
+            regions[rg] += 1
 
-    for u in user_rows:
-        loc = u.get('location') or ''
-        if loc:
-            regions[loc] += 1
+    by_id = {}
+    for m in members:
+        node_id = str(m["id"])
+        node = {
+            "id": node_id,
+            "name": (m.get("name") or "").strip(),
+            "title": m.get("title") or "",
+            "dept": _to_slug(m.get("dept")),
+            "region": m.get("region") or "",
+            "level": m.get("level") or "",
+            "headcount": 1,
+            "children": [],
+            "user_id": None,
+            "email": None,
+            "role": None,
+        }
+        by_id[node_id] = node
 
-    # ── 5. Build hierarchy tree from employee_details + org_structure_details ──
-    tree_roots = _build_tree(emp_rows, user_by_emp, struct_lookup)
+    roots = []
+    for m in members:
+        node = by_id[str(m["id"])]
+        parent_id = m.get("parent_id")
+        if parent_id and str(parent_id) in by_id:
+            by_id[str(parent_id)]["children"].append(node)
+        else:
+            roots.append(node)
 
-    # Ensure single root node (frontend expects one root)
-    if len(tree_roots) == 0:
-        tree = {"id": "0", "name": "Organization", "title": "", "dept": "exec", "region": "", "level": "", "headcount": total_headcount, "children": [], "user_id": None, "email": None, "role": None}
-    elif len(tree_roots) == 1:
-        tree = tree_roots[0]
+    if len(roots) == 0:
+        tree = {"id": "0", "name": "Organization", "title": "", "dept": "exec",
+                "region": "", "level": "", "headcount": total_headcount,
+                "children": [], "user_id": None, "email": None, "role": None}
+    elif len(roots) == 1:
+        tree = roots[0]
     else:
         tree = {
             "id": "0", "name": "Organization", "title": "Top Level",
-            "dept": "exec", "region": "", "level": "", "headcount": total_headcount,
-            "children": tree_roots, "user_id": None, "email": None, "role": None,
+            "dept": "exec", "region": "", "level": "",
+            "headcount": total_headcount, "children": roots,
+            "user_id": None, "email": None, "role": None,
         }
 
-    # ── 6. Attach user_id and role to tree nodes ──
-    try:
-        result = await db.execute(
-            text("SELECT id as user_id, full_name, email, role FROM users WHERE org_id = :oid"),
-            {"oid": org_id},
-        )
-        app_users = [dict(r) for r in result.mappings().all()]
-    except Exception:
-        app_users = []
-
-    userByEmail = {u['email'].lower(): u for u in app_users if u.get('email')}
+    user_by_emp = {}
+    for u in user_rows_raw:
+        eid = str(u.get("emp_id", ""))
+        if eid:
+            user_by_emp[eid] = u
 
     def attach_user_info(node):
-        email = (node.get('email') or '').lower().strip()
-        matched = userByEmail.get(email)
+        eid = node["id"]
+        matched = user_by_emp.get(eid)
         if matched:
-            node['user_id'] = matched['user_id']
-            node['role'] = matched.get('role')
-        emp_id = node.get('emp_id')
-        if emp_id and emp_id in user_by_emp:
-            urm = user_by_emp[emp_id]
-            if not node.get('role') and urm.get('role'):
-                node['role'] = urm['role']
-            if not node.get('title') and urm.get('designation'):
-                node['title'] = urm['designation']
-            if urm.get('location'):
-                node['region'] = urm['location']
-        for child in node.get('children', []):
+            node["role"] = matched.get("role") or matched.get("designation") or node["role"]
+            if matched.get("location"):
+                node["region"] = matched["location"]
+            node["email"] = matched.get("email_address") or ""
+        for child in node.get("children", []):
             attach_user_info(child)
 
     if isinstance(tree, dict):
@@ -211,22 +153,19 @@ async def get_org_full(
         for root in tree:
             attach_user_info(root)
 
-    logger.info(
-        "Org loaded: %d employees, %d users [org=%s]",
-        total_members, total_users, org_id,
-    )
+    logger.info("Org loaded: %d members, %d users [mysql_org=%s]", total_members, total_users, mysql_org_id)
 
     return {
         "tree": tree,
         "users": [
             {
-                "user_id": r.get("emp_id"),
-                "full_name": r.get("name") or "",
-                "email": r.get("email_address") or "",
-                "role": r.get("designation") or r.get("role") or "user",
-                "created_at": r.get("created_date"),
+                "user_id": u.get("emp_id"),
+                "full_name": u.get("name") or "",
+                "email": u.get("email_address") or "",
+                "role": u.get("designation") or u.get("role") or "user",
+                "created_at": None,
             }
-            for r in user_rows
+            for u in user_rows_raw
         ],
         "summary": {
             "total_members": total_members,
@@ -241,84 +180,123 @@ async def get_org_full(
 
 @router.get("/org/tree")
 async def get_org_tree(
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    user_id = ctx["user_id"]
-    org_id = ctx["org_id"]
+    email = ctx.get("email", "")
+    mysql_org_id = await _resolve_mysql_org_id(email)
 
-    try:
-        result = await db.execute(
-            text(
-                "SELECT emp_id, org_id, dept_id, first_name, last_name, title, "
-                "parent_emp_id, email_address, department, location, status "
-                "FROM employee_details WHERE org_id = :oid AND (status IS NULL OR status != 'InActive')"
-            ),
-            {"oid": org_id},
-        )
-        emp_rows = [dict(r) for r in result.mappings().all()]
-        for e in emp_rows:
-            fn = (e.get('first_name') or '').strip()
-            ln = (e.get('last_name') or '').strip()
-            e['full_name'] = f"{fn} {ln}".strip() or f"User {e['emp_id']}"
-    except Exception:
-        return {"tree": []}
+    if mysql_org_id is None:
+        return {"tree": {"id": "0", "name": "Organization", "title": "", "dept": "exec",
+                         "region": "", "level": "", "headcount": 0, "children": []}}
 
-    try:
-        result = await db.execute(
-            text(
-                'WITH org_employees AS ('
-                '  SELECT emp_id FROM employee_details '
-                '  WHERE org_id = :oid AND (status IS NULL OR status != \'InActive\')'
-                '), '
-                'latest_struct AS ('
-                '  SELECT DISTINCT ON (empid) empid, parent_id '
-                '  FROM org_structure_details '
-                "  WHERE status = 'Active' AND empid IN (SELECT emp_id FROM org_employees) "
-                '  ORDER BY empid, start_date DESC'
-                ') '
-                'SELECT empid, parent_id FROM latest_struct'
-            ),
-            {"oid": org_id},
-        )
-        struct_rows = [dict(r) for r in result.mappings().all()]
-        struct_lookup = {r['empid']: r for r in struct_rows}
-    except Exception:
-        struct_lookup = {}
+    members = await _fetch_employees(mysql_org_id)
+    total_headcount = len(members)
 
-    tree_roots = _build_tree(emp_rows, {}, struct_lookup)
-    return {"tree": tree_roots[0] if len(tree_roots) == 1 else tree_roots}
+    by_id = {}
+    for m in members:
+        node_id = str(m["id"])
+        node = {
+            "id": node_id, "name": (m.get("name") or "").strip(),
+            "title": m.get("title") or "", "dept": _to_slug(m.get("dept")),
+            "region": m.get("region") or "", "level": m.get("level") or "",
+            "headcount": 1, "children": [],
+        }
+        by_id[node_id] = node
+
+    roots = []
+    for m in members:
+        node = by_id[str(m["id"])]
+        parent_id = m.get("parent_id")
+        if parent_id and str(parent_id) in by_id:
+            by_id[str(parent_id)]["children"].append(node)
+        else:
+            roots.append(node)
+
+    # Apply same virtual-root fallback as /org to ensure frontend always gets a single node
+    if len(roots) == 0:
+        tree = {"id": "0", "name": "Organization", "title": "", "dept": "exec",
+                "region": "", "level": "", "headcount": total_headcount,
+                "children": []}
+    elif len(roots) == 1:
+        tree = roots[0]
+    else:
+        tree = {
+            "id": "0", "name": "Organization", "title": "Top Level",
+            "dept": "exec", "region": "", "level": "",
+            "headcount": total_headcount, "children": roots,
+        }
+
+    return {"tree": tree}
 
 
 @router.get("/org/users")
 async def list_org_users(
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    user_id = ctx["user_id"]
-    org_id = ctx["org_id"]
+    email = ctx.get("email", "")
+    mysql_org_id = await _resolve_mysql_org_id(email)
 
-    try:
-        result = await db.execute(
-            text(
-                "SELECT emp_id, name, email_address, designation, role, department, location, status "
-                "FROM user_role_management WHERE org_id = :oid"
-            ),
-            {"oid": org_id},
-        )
-        rows = [dict(r) for r in result.mappings().all()]
-        users = [
+    if mysql_org_id is None:
+        return {"users": []}
+
+    rows = await _fetch_users(mysql_org_id)
+    return {
+        "users": [
             {
                 "user_id": r.get("emp_id"),
                 "full_name": r.get("name") or "",
                 "email": r.get("email_address") or "",
                 "role": r.get("designation") or r.get("role") or "user",
-                "created_at": r.get("created_date"),
+                "created_at": None,
             }
             for r in rows
         ]
-    except Exception as exc:
-        logger.warning("Failed to query users for org=%s: %s", org_id, exc)
-        users = []
+    }
 
-    return {"users": users}
+
+async def _fetch_employees(mysql_org_id):
+    """Fetch Active employees from MySQL via bridge, scoped to the caller's org."""
+    try:
+        rows = await bridge.get(bridge.db_service, "/employeeDetailsList")
+        if not isinstance(rows, list):
+            return []
+        return [
+            {
+                "id": r.get("emp_id"),
+                "org_id": r.get("org_id"),
+                "parent_id": r.get("parent_emp_id"),
+                "name": ((r.get("first_name") or "") + " " + (r.get("last_name") or "")).strip() or f"User {r.get('emp_id')}",
+                "title": r.get("title") or "",
+                "dept": r.get("department") or "",
+                "region": r.get("location") or "",
+                "level": "",
+                "email_address": r.get("email_address") or "",
+            }
+            for r in rows
+            if r.get("org_id") == mysql_org_id and r.get("status") == "Active"
+        ]
+    except Exception as exc:
+        logger.warning("Failed to query employee_details for mysql_org=%s: %s", mysql_org_id, exc)
+        return []
+
+
+async def _fetch_users(mysql_org_id):
+    """Fetch user roles from MySQL via bridge, scoped to the caller's org."""
+    try:
+        rows = await bridge.get(bridge.db_service, "/userRoleMgmt")
+        if not isinstance(rows, list):
+            return []
+        return [
+            {
+                "emp_id": r.get("emp_id"),
+                "name": r.get("name") or "",
+                "email_address": r.get("email_address") or "",
+                "designation": r.get("designation") or "",
+                "role": r.get("role") or "",
+            }
+            for r in rows
+            if r.get("org_id") == mysql_org_id
+        ]
+    except Exception as exc:
+        logger.warning("Failed to query user_role_management for mysql_org=%s: %s", mysql_org_id, exc)
+        return []

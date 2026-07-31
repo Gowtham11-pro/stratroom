@@ -4,10 +4,7 @@ Provides query, create, update, and delete functions that agents can invoke
 via tool calls. All functions are async and accept a DB session + user context.
 Supports RBAC: admin users manage all org scorecards, members manage only assigned.
 """
-import json
 import logging
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("stratroom.agents.scorecard_tools")
 
@@ -15,7 +12,6 @@ VALID_SC_STATUSES = {"on-track", "at-risk", "critical"}
 
 
 async def query_scorecards(
-    db: AsyncSession,
     user_id: int,
     org_id: int,
     perspective_filter: str | None = None,
@@ -23,41 +19,42 @@ async def query_scorecards(
     is_admin: bool = False,
     is_manager: bool = False,
 ) -> dict:
-    """Query scorecards (KPIs) for the current user's organization.
+    """Query scorecards (KPIs) from MySQL scorecard_kpis via the bridge.
 
     Admin/manager users see all scorecards. Members see only assigned.
+    Uses direct org_id column (no employee_details JOIN needed — scorecard_kpis
+    has its own org_id).
     Returns a dict with 'scorecards' list and 'summary' stats.
     """
-    where_clauses = ["org_id = :oid"]
-    params: dict = {"oid": org_id}
+    from app.services.java_bridge import bridge
+
+    where_clauses = ["org_id = %s"]
+    params = [org_id]
 
     if not is_admin and not is_manager:
-        where_clauses.append("assigned_user_id = :uid")
-        params["uid"] = user_id
+        where_clauses.append("assigned_user_id = %s")
+        params.append(user_id)
 
     if perspective_filter:
-        where_clauses.append("perspective = :perspective")
-        params["perspective"] = perspective_filter
+        where_clauses.append("perspective = %s")
+        params.append(perspective_filter)
 
     if status_filter:
         if status_filter in VALID_SC_STATUSES:
-            where_clauses.append("status = :status")
-            params["status"] = status_filter
+            where_clauses.append("status = %s")
+            params.append(status_filter)
 
     where_sql = " AND ".join(where_clauses)
 
-    result = await db.execute(
-        text(
-            f"SELECT id, perspective, kpi_name, target, actual, owner, status, assigned_user_id "
-            f"FROM scorecards WHERE {where_sql} "
-            f"ORDER BY perspective, id"
-        ),
-        params,
+    rows = await bridge._mysql(
+        f"SELECT id, perspective, kpi_name, target, actual, owner, status, assigned_user_id "
+        f"FROM scorecard_kpis WHERE {where_sql} "
+        f"ORDER BY perspective, id",
+        tuple(params),
     )
-    scorecards = [dict(r) for r in result.mappings().all()]
 
     # Compute gap analysis
-    for sc in scorecards:
+    for sc in rows:
         t = sc.get("target")
         a = sc.get("actual")
         if t and t != 0:
@@ -66,18 +63,17 @@ async def query_scorecards(
             sc["gap_pct"] = 0
 
     summary = {
-        "total": len(scorecards),
-        "on_track": sum(1 for s in scorecards if s["status"] == "on-track"),
-        "at_risk": sum(1 for s in scorecards if s["status"] == "at-risk"),
-        "critical": sum(1 for s in scorecards if s["status"] == "critical"),
-        "perspectives": list(set(s["perspective"] for s in scorecards)),
+        "total": len(rows),
+        "on_track": sum(1 for s in rows if s["status"] == "on-track"),
+        "at_risk": sum(1 for s in rows if s["status"] == "at-risk"),
+        "critical": sum(1 for s in rows if s["status"] == "critical"),
+        "perspectives": list(set(s["perspective"] for s in rows)),
     }
 
-    return {"scorecards": scorecards, "summary": summary}
+    return {"scorecards": rows, "summary": summary}
 
 
 async def query_scorecard_summary(
-    db: AsyncSession,
     user_id: int,
     org_id: int,
     is_admin: bool = False,
@@ -85,42 +81,53 @@ async def query_scorecard_summary(
 ) -> dict:
     """Get an aggregated summary of scorecard perspectives.
 
+    Reads from MySQL scorecard_kpis via the bridge.
+    Admin/manager users see all perspectives. Members see only assigned.
     Returns avg actual scores, KPI counts, and status breakdown per perspective.
     """
+    from app.services.java_bridge import bridge
+
     if is_admin or is_manager:
-        result = await db.execute(
-            text(
-                "SELECT perspective, "
-                "ROUND(AVG(actual)) as avg_score, "
-                "COUNT(*) as kpi_count, "
-                "SUM(CASE WHEN status = 'on-track' THEN 1 ELSE 0 END) as on_track, "
-                "SUM(CASE WHEN status = 'at-risk' THEN 1 ELSE 0 END) as at_risk, "
-                "SUM(CASE WHEN status = 'critical' THEN 1 ELSE 0 END) as critical "
-                "FROM scorecards WHERE org_id = :oid "
-                "GROUP BY perspective ORDER BY MIN(id)"
-            ),
-            {"oid": org_id},
+        rows = await bridge._mysql(
+            "SELECT perspective, "
+            "ROUND(AVG(actual)) as avg_score, "
+            "COUNT(*) as kpi_count, "
+            "SUM(CASE WHEN status = 'on-track' THEN 1 ELSE 0 END) as on_track, "
+            "SUM(CASE WHEN status = 'at-risk' THEN 1 ELSE 0 END) as at_risk, "
+            "SUM(CASE WHEN status = 'critical' THEN 1 ELSE 0 END) as critical "
+            "FROM scorecard_kpis WHERE org_id = %s "
+            "GROUP BY perspective ORDER BY MIN(id)",
+            (org_id,),
         )
     else:
-        result = await db.execute(
-            text(
-                "SELECT perspective, "
-                "ROUND(AVG(actual)) as avg_score, "
-                "COUNT(*) as kpi_count, "
-                "SUM(CASE WHEN status = 'on-track' THEN 1 ELSE 0 END) as on_track, "
-                "SUM(CASE WHEN status = 'at-risk' THEN 1 ELSE 0 END) as at_risk, "
-                "SUM(CASE WHEN status = 'critical' THEN 1 ELSE 0 END) as critical "
-                "FROM scorecards WHERE org_id = :oid AND assigned_user_id = :uid "
-                "GROUP BY perspective ORDER BY MIN(id)"
-            ),
-            {"oid": org_id, "uid": user_id},
+        rows = await bridge._mysql(
+            "SELECT perspective, "
+            "ROUND(AVG(actual)) as avg_score, "
+            "COUNT(*) as kpi_count, "
+            "SUM(CASE WHEN status = 'on-track' THEN 1 ELSE 0 END) as on_track, "
+            "SUM(CASE WHEN status = 'at-risk' THEN 1 ELSE 0 END) as at_risk, "
+            "SUM(CASE WHEN status = 'critical' THEN 1 ELSE 0 END) as critical "
+            "FROM scorecard_kpis WHERE org_id = %s AND assigned_user_id = %s "
+            "GROUP BY perspective ORDER BY MIN(id)",
+            (org_id, user_id),
         )
-    rows = result.mappings().all()
-    return {"perspectives": [dict(r) for r in rows]}
+
+    # Convert numeric types for JSON serialization
+    result = []
+    for r in rows:
+        result.append({
+            "perspective": r["perspective"],
+            "avg_score": int(r["avg_score"]),
+            "kpi_count": int(r["kpi_count"]),
+            "on_track": int(r["on_track"]),
+            "at_risk": int(r["at_risk"]),
+            "critical": int(r["critical"]),
+        })
+
+    return {"perspectives": result}
 
 
 async def create_scorecard(
-    db: AsyncSession,
     org_id: int,
     perspective: str,
     kpi_name: str,
@@ -129,12 +136,20 @@ async def create_scorecard(
     owner: str = "",
     status: str = "on-track",
     assigned_user_id: int | None = None,
+    is_admin: bool = False,
+    is_manager: bool = False,
 ) -> dict:
-    """Create a new scorecard/KPI record in the database.
+    """Create a new scorecard/KPI record in MySQL scorecard_kpis via the bridge.
 
+    Restricted to managers/admins (matching the HTTP endpoint and query_scorecards).
     Status must be one of: on-track, at-risk, critical.
-    Returns the created scorecard record.
+    Returns the created scorecard record with its new ID.
     """
+    from app.services.java_bridge import bridge
+
+    if not is_admin and not is_manager:
+        return {"error": "Only managers and admins can create scorecards."}
+
     if not perspective or not perspective.strip():
         return {"error": "Perspective is required"}
     if not kpi_name or not kpi_name.strip():
@@ -142,35 +157,20 @@ async def create_scorecard(
     if status not in VALID_SC_STATUSES:
         return {"error": f"Invalid status '{status}'. Must be one of: {', '.join(sorted(VALID_SC_STATUSES))}"}
 
-    # Verify assigned user if provided
+    # Verify assigned user if provided (MySQL users table)
     if assigned_user_id is not None:
-        user_check = await db.execute(
-            text("SELECT id FROM users WHERE id = :uid AND org_id = :oid"),
-            {"uid": assigned_user_id, "oid": org_id},
+        user_check = await bridge._mysql(
+            "SELECT id FROM users WHERE id = %s AND org_id = %s",
+            (assigned_user_id, org_id),
         )
-        if not user_check.first():
+        if not user_check:
             return {"error": "Assigned user not found in this organization"}
 
-    result = await db.execute(
-        text(
-            "INSERT INTO scorecards (org_id, perspective, kpi_name, target, actual, owner, status, assigned_user_id) "
-            "VALUES (:oid, :perspective, :kpi_name, :target, :actual, :owner, :status, :assigned_user_id) "
-            "RETURNING id"
-        ),
-        {
-            "oid": org_id,
-            "perspective": perspective.strip(),
-            "kpi_name": kpi_name.strip(),
-            "target": target,
-            "actual": actual,
-            "owner": owner,
-            "status": status,
-            "assigned_user_id": assigned_user_id,
-        },
+    sc_id = await bridge._mysql_write(
+        "INSERT INTO scorecard_kpis (org_id, perspective, kpi_name, target, actual, owner, status, assigned_user_id) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+        (org_id, perspective.strip(), kpi_name.strip(), target, actual, owner, status, assigned_user_id),
     )
-    row = result.mappings().first()
-    sc_id = row["id"]
-    await db.commit()
 
     logger.info("Scorecard created: id=%d org=%s perspective=%s kpi=%s", sc_id, org_id, perspective, kpi_name)
     return {
@@ -183,7 +183,6 @@ async def create_scorecard(
 
 
 async def update_scorecard(
-    db: AsyncSession,
     user_id: int,
     org_id: int,
     scorecard_id: int,
@@ -196,24 +195,25 @@ async def update_scorecard(
     status: str | None = None,
     assigned_user_id: int | None = None,
 ) -> dict:
-    """Update an existing scorecard/KPI record.
+    """Update an existing scorecard/KPI record in MySQL scorecard_kpis via the bridge.
 
     Admin users can update any scorecard in their org.
     Members can only update scorecards assigned to them.
     Returns the updated fields summary.
     """
+    from app.services.java_bridge import bridge
+
     # Verify ownership
     if is_admin:
-        result = await db.execute(
-            text("SELECT id, assigned_user_id FROM scorecards WHERE id = :sid AND org_id = :oid"),
-            {"sid": scorecard_id, "oid": org_id},
+        existing = await bridge._mysql(
+            "SELECT id, assigned_user_id FROM scorecard_kpis WHERE id = %s AND org_id = %s",
+            (scorecard_id, org_id),
         )
     else:
-        result = await db.execute(
-            text("SELECT id, assigned_user_id FROM scorecards WHERE id = :sid AND org_id = :oid AND assigned_user_id = :uid"),
-            {"sid": scorecard_id, "oid": org_id, "uid": user_id},
+        existing = await bridge._mysql(
+            "SELECT id, assigned_user_id FROM scorecard_kpis WHERE id = %s AND org_id = %s AND assigned_user_id = %s",
+            (scorecard_id, org_id, user_id),
         )
-    existing = result.mappings().first()
     if not existing:
         return {"error": f"Scorecard {scorecard_id} not found or not assigned to you."}
 
@@ -238,26 +238,26 @@ async def update_scorecard(
     if assigned_user_id is not None:
         if not is_admin:
             return {"error": "Only admins can reassign scorecards."}
-        user_check = await db.execute(
-            text("SELECT id FROM users WHERE id = :uid AND org_id = :oid"),
-            {"uid": assigned_user_id, "oid": org_id},
+        user_check = await bridge._mysql(
+            "SELECT id FROM users WHERE id = %s AND org_id = %s",
+            (assigned_user_id, org_id),
         )
-        if not user_check.first():
+        if not user_check:
             return {"error": "Assigned user not found in this organization"}
         updates["assigned_user_id"] = assigned_user_id
 
     if not updates:
         return {"error": "No fields to update.", "action": "no_change"}
 
-    set_clause = ", ".join(f"{k} = :{k}" for k in updates)
-    updates["sid"] = scorecard_id
-    updates["oid"] = org_id
+    # Dynamic UPDATE with %s placeholders for MySQL
+    set_clause = ", ".join(f"{k} = %s" for k in updates)
+    params = list(updates.values())
+    params.extend([scorecard_id, org_id])
 
-    await db.execute(
-        text(f"UPDATE scorecards SET {set_clause} WHERE id = :sid AND org_id = :oid"),
-        updates,
+    await bridge._mysql_write(
+        f"UPDATE scorecard_kpis SET {set_clause} WHERE id = %s AND org_id = %s",
+        tuple(params),
     )
-    await db.commit()
 
     logger.info("Scorecard updated: id=%d org=%s fields=%s", scorecard_id, org_id, list(updates.keys()))
     return {
@@ -268,35 +268,34 @@ async def update_scorecard(
 
 
 async def delete_scorecard(
-    db: AsyncSession,
     user_id: int,
     org_id: int,
     scorecard_id: int,
     is_admin: bool = False,
 ) -> dict:
-    """Delete a scorecard/KPI record from the database.
+    """Delete a scorecard/KPI record from MySQL scorecard_kpis via the bridge.
 
     Only admin users can delete scorecards.
     Returns confirmation of deletion.
     """
+    from app.services.java_bridge import bridge
+
     if not is_admin:
         return {"error": "Only admins can delete scorecards."}
 
-    result = await db.execute(
-        text("SELECT id, kpi_name FROM scorecards WHERE id = :sid AND org_id = :oid"),
-        {"sid": scorecard_id, "oid": org_id},
+    existing = await bridge._mysql(
+        "SELECT id, kpi_name FROM scorecard_kpis WHERE id = %s AND org_id = %s",
+        (scorecard_id, org_id),
     )
-    scorecard = result.mappings().first()
-    if not scorecard:
+    if not existing:
         return {"error": f"Scorecard {scorecard_id} not found in your organization."}
 
-    kpi_name = scorecard["kpi_name"]
+    kpi_name = existing[0]["kpi_name"]
 
-    await db.execute(
-        text("DELETE FROM scorecards WHERE id = :sid AND org_id = :oid"),
-        {"sid": scorecard_id, "oid": org_id},
+    await bridge._mysql_write(
+        "DELETE FROM scorecard_kpis WHERE id = %s AND org_id = %s",
+        (scorecard_id, org_id),
     )
-    await db.commit()
 
     logger.info("Scorecard deleted: id=%d kpi=%s org=%s", scorecard_id, kpi_name, org_id)
     return {

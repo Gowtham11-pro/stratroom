@@ -1,10 +1,9 @@
-"""Lightweight AI observability — logs agent runs to the database and tracks in-memory counters."""
+"""Lightweight AI observability — logs agent runs to MySQL and tracks in-memory counters."""
 import logging
 import time
 import threading
 
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from app.services.java_bridge import bridge
 
 logger = logging.getLogger("stratroom.ai.metrics")
 
@@ -70,7 +69,6 @@ counters = _Counters()
 
 
 async def log_agent_run(
-    db: AsyncSession,
     *,
     org_id: int | None,
     user_id: int | None,
@@ -84,32 +82,21 @@ async def log_agent_run(
     error_message: str | None = None,
     retry_count: int = 0,
 ):
-    """Insert a row into ai_agent_runs and update in-memory counters.
+    """Insert a row into MySQL ai_agent_runs and update in-memory counters.
 
     Never raises — failures are logged and swallowed.
     """
     try:
         counters.record(status=status, duration_ms=duration_ms or 0, retries=retry_count)
-        await db.execute(
-            text(
-                "INSERT INTO ai_agent_runs "
-                "(org_id, user_id, agent_name, provider, model, conversation_id, "
-                "status, duration_ms, token_count, error_message) "
-                "VALUES (:org_id, :user_id, :agent, :provider, :model, :conv_id, "
-                ":status, :duration, :tokens, :error)"
+        await bridge._mysql_write(
+            "INSERT INTO ai_agent_runs "
+            "(org_id, user_id, agent_name, provider, model, conversation_id, "
+            "status, duration_ms, token_count, error_message) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                org_id, user_id, agent_name, provider, model,
+                conversation_id, status, duration_ms, token_count, error_message,
             ),
-            {
-                "org_id": org_id,
-                "user_id": user_id,
-                "agent": agent_name,
-                "provider": provider,
-                "model": model,
-                "conv_id": conversation_id,
-                "status": status,
-                "duration": duration_ms,
-                "tokens": token_count,
-                "error": error_message,
-            },
         )
     except Exception:
         logger.exception("Failed to log AI agent run")

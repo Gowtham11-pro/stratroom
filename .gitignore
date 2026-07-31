@@ -7,6 +7,21 @@ pgdata/
 node_modules/
 ml/models/*.joblib
 
+# Local tooling & secrets (never commit)
+.opencode/
+run_*.ps1
+rbac_diag.py
+ssh_final_cleanup.py
+ssh_verify_cleanup.py
+trace_user.py
+check_logs.py
+check_logs2.py
+deploy_frontend.py
+log_tracker.py
+.log_tracker_state.json
+0
+backend/app/routers/api_v1.py.restored
+
 # IDE
 .vscode/
 .idea/

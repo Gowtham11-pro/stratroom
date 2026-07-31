@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.agents.base import AgentRunner
 from app.agents.prompts import AGENT_PROMPTS
 from app.agents.task_tools import query_user_tasks, update_task_progress
+from app.services.java_bridge import bridge
 
 AGENT_DOMAINS = [
     "strategy", "risk", "finance", "compliance", "audit",
@@ -83,11 +84,11 @@ async def agent_chat(
     runner = AgentRunner(req.agent)
     try:
         if req.conversation_id:
-            ownership = await db.execute(
-                text("SELECT id FROM agent_conversations WHERE id = :cid AND user_id = :uid"),
-                {"cid": req.conversation_id, "uid": user_id},
+            conv = await bridge.get(
+                bridge.db_service, f"/conversations/{req.conversation_id}",
+                params={"uid": user_id},
             )
-            if not ownership.first():
+            if not conv:
                 raise HTTPException(status_code=404, detail="Conversation not found")
 
         result = await runner.run(
@@ -138,6 +139,7 @@ async def task_action(
                 status_filter=req.status,
                 priority_filter=req.priority,
                 is_admin=is_admin,
+                email=ctx.get("email"),
             )
             return result
 
@@ -146,6 +148,7 @@ async def task_action(
                 raise HTTPException(status_code=422, detail="task_id is required for update action")
             result = await update_task_progress(
                 db, user_id, org_id, req.task_id, req.status, is_admin,
+                email=ctx.get("email"),
             )
             if "error" in result:
                 raise HTTPException(status_code=404, detail=result["error"])
@@ -164,85 +167,50 @@ async def task_action(
 @router.get("/conversations")
 async def list_conversations(
     agent: Optional[str] = None,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    user_id = ctx["user_id"]
-    org_id = ctx["org_id"]
-
+    params = {"uid": ctx["user_id"], "oid": ctx["org_id"]}
     if agent:
-        result = await db.execute(
-            text(
-                "SELECT id, agent_name, title, created_at "
-                "FROM agent_conversations WHERE agent_name = :agent "
-                "AND user_id = :uid AND org_id = :oid "
-                "ORDER BY created_at DESC LIMIT 50"
-            ),
-            {"agent": agent, "uid": user_id, "oid": org_id},
-        )
-    else:
-        result = await db.execute(
-            text(
-                "SELECT id, agent_name, title, created_at "
-                "FROM agent_conversations WHERE user_id = :uid AND org_id = :oid "
-                "ORDER BY created_at DESC LIMIT 50"
-            ),
-            {"uid": user_id, "oid": org_id},
-        )
-    rows = result.mappings().all()
-    return {"conversations": [dict(r) for r in rows]}
+        params["agent"] = agent
+    result = await bridge.get(
+        bridge.db_service, "/conversations",
+        params=params,
+    )
+    return {"conversations": result if isinstance(result, list) else []}
 
 
 @router.get("/messages/{conversation_id}")
 async def get_messages(
     conversation_id: int,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    user_id = ctx["user_id"]
-
-    ownership = await db.execute(
-        text("SELECT id FROM agent_conversations WHERE id = :cid AND user_id = :uid"),
-        {"cid": conversation_id, "uid": user_id},
+    conv = await bridge.get(
+        bridge.db_service, f"/conversations/{conversation_id}",
+        params={"uid": ctx["user_id"]},
     )
-    if not ownership.first():
+    if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    result = await db.execute(
-        text(
-            "SELECT id, role, content, created_at "
-            "FROM agent_messages WHERE conversation_id = :cid ORDER BY id"
-        ),
-        {"cid": conversation_id},
+    messages = await bridge.get(
+        bridge.db_service, f"/conversations/{conversation_id}/messages",
     )
-    rows = result.mappings().all()
-    return {"messages": [dict(r) for r in rows]}
+    return {"messages": messages if isinstance(messages, list) else []}
 
 
 @router.delete("/conversations/{conversation_id}")
 async def delete_conversation(
     conversation_id: int,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    user_id = ctx["user_id"]
-
-    ownership = await db.execute(
-        text("SELECT id FROM agent_conversations WHERE id = :cid AND user_id = :uid"),
-        {"cid": conversation_id, "uid": user_id},
+    conv = await bridge.get(
+        bridge.db_service, f"/conversations/{conversation_id}",
+        params={"uid": ctx["user_id"]},
     )
-    if not ownership.first():
+    if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    await db.execute(
-        text("DELETE FROM agent_messages WHERE conversation_id = :cid"),
-        {"cid": conversation_id},
-    )
-    await db.execute(
-        text("DELETE FROM agent_conversations WHERE id = :cid AND user_id = :uid"),
-        {"cid": conversation_id, "uid": user_id},
-    )
-    await db.commit()
+    await bridge.delete(bridge.db_service, f"/conversations/{conversation_id}/messages")
+    await bridge.delete(bridge.db_service, f"/conversations/{conversation_id}")
     return {"ok": True}
 
 
@@ -273,7 +241,6 @@ async def test_ollama_connection(
 
 @router.get("/status")
 async def get_agent_status(
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
     start_t = time.time()
@@ -294,64 +261,55 @@ async def get_agent_status(
         domain_failed = 0
 
         try:
-            result = await db.execute(
-                text(
-                    "SELECT id, provider, model, status, duration_ms, "
-                    "error_message, created_at "
-                    "FROM ai_agent_runs "
-                    "WHERE agent_name = :agent AND user_id = :uid "
-                    "ORDER BY created_at DESC LIMIT 1"
-                ),
-                {"agent": domain, "uid": user_id},
+            rows = await bridge._mysql(
+                "SELECT id, provider, model, status, duration_ms, "
+                "error_message, created_at "
+                "FROM ai_agent_runs "
+                "WHERE agent_name = %s AND user_id = %s "
+                "ORDER BY created_at DESC LIMIT 1",
+                (domain, user_id),
             )
-            last_run_row = result.mappings().first()
+            last_run_row = rows[0] if rows else None
         except Exception:
             logger.warning("Failed to query ai_agent_runs for agent=%s", domain)
 
         try:
-            result = await db.execute(
-                text(
-                    "SELECT COUNT(*) FROM agent_conversations "
-                    "WHERE agent_name = :agent AND user_id = :uid"
-                ),
-                {"agent": domain, "uid": user_id},
+            rows = await bridge._mysql(
+                "SELECT COUNT(*) as cnt FROM agent_conversations "
+                "WHERE agent_name = %s AND user_id = %s",
+                (domain, user_id),
             )
-            conversation_count = result.scalar() or 0
+            conversation_count = int(rows[0]["cnt"]) if rows else 0
         except Exception:
             logger.warning("Failed to query conversations for agent=%s", domain)
 
         try:
-            result = await db.execute(
-                text(
-                    "SELECT content FROM agent_messages "
-                    "WHERE conversation_id IN ("
-                    "  SELECT id FROM agent_conversations "
-                    "  WHERE agent_name = :agent AND user_id = :uid "
-                    "  ORDER BY created_at DESC LIMIT 1"
-                    ") AND role = 'assistant' "
-                    "ORDER BY id DESC LIMIT 1"
-                ),
-                {"agent": domain, "uid": user_id},
+            rows = await bridge._mysql(
+                "SELECT content FROM agent_messages "
+                "WHERE conversation_id IN ("
+                "  SELECT id FROM agent_conversations "
+                "  WHERE agent_name = %s AND user_id = %s "
+                "  ORDER BY created_at DESC LIMIT 1"
+                ") AND role = 'assistant' "
+                "ORDER BY id DESC LIMIT 1",
+                (domain, user_id),
             )
-            row = result.mappings().first()
-            if row:
-                last_finding = (row["content"] or "")[:300]
+            if rows:
+                last_finding = (rows[0]["content"] or "")[:300]
         except Exception:
             logger.warning("Failed to query last finding for agent=%s", domain)
 
         try:
-            result = await db.execute(
-                text(
-                    "SELECT COUNT(*) as total, "
-                    "  SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success, "
-                    "  SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as failed "
-                    "FROM ai_agent_runs "
-                    "WHERE agent_name = :agent AND user_id = :uid"
-                ),
-                {"agent": domain, "uid": user_id},
+            rows = await bridge._mysql(
+                "SELECT COUNT(*) as total, "
+                "  SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as success, "
+                "  SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as failed "
+                "FROM ai_agent_runs "
+                "WHERE agent_name = %s AND user_id = %s",
+                (domain, user_id),
             )
-            agg = result.mappings().first()
-            if agg:
+            if rows:
+                agg = rows[0]
                 domain_total = int(agg["total"] or 0)
                 domain_success = int(agg["success"] or 0)
                 domain_failed = int(agg["failed"] or 0)
@@ -369,19 +327,21 @@ async def get_agent_status(
         last_error = None
 
         if last_run_row:
-            last_run = last_run_row["created_at"].isoformat() if last_run_row["created_at"] else None
-            duration_ms = last_run_row["duration_ms"]
-            provider = last_run_row["provider"]
-            model = last_run_row["model"]
-            last_error = last_run_row["error_message"]
+            created_at = last_run_row.get("created_at")
+            last_run = created_at.isoformat() if created_at and hasattr(created_at, "isoformat") else (str(created_at) if created_at else None)
+            duration_ms = last_run_row.get("duration_ms")
+            provider = last_run_row.get("provider")
+            model = last_run_row.get("model")
+            last_error = last_run_row.get("error_message")
 
-            if last_run_row["status"] == "error":
+            if last_run_row.get("status") == "error":
                 agent_status = "error"
-            elif last_run_row["created_at"]:
-                age = (datetime.utcnow() - last_run_row["created_at"].replace(tzinfo=None)).total_seconds()
-                if age < 300:
-                    agent_status = "active"
-                else:
+            elif created_at:
+                try:
+                    age = (datetime.utcnow() - created_at).total_seconds()
+                    if age < 300:
+                        agent_status = "active"
+                except Exception:
                     agent_status = "standby"
         else:
             agent_status = "standby"
@@ -412,7 +372,6 @@ async def get_agent_status(
 @router.get("/history/{agent_name}")
 async def get_agent_history(
     agent_name: str,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
     agent_name = agent_name.strip().lower()
@@ -422,18 +381,22 @@ async def get_agent_history(
     user_id = ctx["user_id"]
 
     try:
-        result = await db.execute(
-            text(
-                "SELECT id, provider, model, status, duration_ms, "
-                "error_message, created_at "
-                "FROM ai_agent_runs "
-                "WHERE agent_name = :agent AND user_id = :uid "
-                "ORDER BY created_at DESC LIMIT 20"
-            ),
-            {"agent": agent_name, "uid": user_id},
+        rows = await bridge._mysql(
+            "SELECT id, provider, model, status, duration_ms, "
+            "error_message, created_at "
+            "FROM ai_agent_runs "
+            "WHERE agent_name = %s AND user_id = %s "
+            "ORDER BY created_at DESC LIMIT 20",
+            (agent_name, user_id),
         )
-        rows = result.mappings().all()
-        return {"history": [dict(r) for r in rows]}
+        # Convert datetime objects to isoformat strings
+        result = []
+        for r in rows:
+            d = dict(r)
+            if d.get("created_at"):
+                d["created_at"] = d["created_at"].isoformat() if hasattr(d["created_at"], "isoformat") else str(d["created_at"])
+            result.append(d)
+        return {"history": result}
     except Exception:
         logger.exception("Failed to query history for agent=%s", agent_name)
         raise HTTPException(status_code=500, detail="Failed to load agent history")
@@ -442,7 +405,6 @@ async def get_agent_history(
 @router.get("/metrics/{agent_name}")
 async def get_agent_metrics(
     agent_name: str,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
     agent_name = agent_name.strip().lower()
@@ -465,56 +427,52 @@ async def get_agent_metrics(
     }
 
     try:
-        result = await db.execute(
-            text(
-                "SELECT "
-                "  COUNT(*) as total_runs, "
-                "  SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful_runs, "
-                "  SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as failed_runs, "
-                "  ROUND(AVG(duration_ms)) as avg_duration_ms "
-                "FROM ai_agent_runs "
-                "WHERE agent_name = :agent AND user_id = :uid"
-            ),
-            {"agent": agent_name, "uid": user_id},
+        rows = await bridge._mysql(
+            "SELECT "
+            "  COUNT(*) as total_runs, "
+            "  SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful_runs, "
+            "  SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as failed_runs, "
+            "  ROUND(AVG(duration_ms)) as avg_duration_ms "
+            "FROM ai_agent_runs "
+            "WHERE agent_name = %s AND user_id = %s",
+            (agent_name, user_id),
         )
-        row = result.mappings().first()
-        if row:
-            metrics["total_runs"] = row["total_runs"] or 0
-            metrics["successful_runs"] = row["successful_runs"] or 0
-            metrics["failed_runs"] = row["failed_runs"] or 0
-            metrics["avg_duration_ms"] = int(row["avg_duration_ms"] or 0)
+        if rows:
+            r = rows[0]
+            metrics["total_runs"] = int(r["total_runs"] or 0)
+            metrics["successful_runs"] = int(r["successful_runs"] or 0)
+            metrics["failed_runs"] = int(r["failed_runs"] or 0)
+            metrics["avg_duration_ms"] = int(r["avg_duration_ms"] or 0)
     except Exception:
         logger.warning("Failed to query metrics for agent=%s", agent_name)
 
     try:
-        result = await db.execute(
-            text(
-                "SELECT provider, model, status, duration_ms, error_message, created_at "
-                "FROM ai_agent_runs "
-                "WHERE agent_name = :agent AND user_id = :uid "
-                "ORDER BY created_at DESC LIMIT 1"
-            ),
-            {"agent": agent_name, "uid": user_id},
+        rows = await bridge._mysql(
+            "SELECT provider, model, status, duration_ms, error_message, created_at "
+            "FROM ai_agent_runs "
+            "WHERE agent_name = %s AND user_id = %s "
+            "ORDER BY created_at DESC LIMIT 1",
+            (agent_name, user_id),
         )
-        row = result.mappings().first()
-        if row:
-            metrics["last_run"] = row["created_at"].isoformat() if row["created_at"] else None
-            metrics["last_status"] = row["status"]
-            metrics["last_provider"] = row["provider"]
-            metrics["last_model"] = row["model"]
-            metrics["last_error"] = row["error_message"]
+        if rows:
+            r = rows[0]
+            ca = r.get("created_at")
+            metrics["last_run"] = ca.isoformat() if ca and hasattr(ca, "isoformat") else (str(ca) if ca else None)
+            metrics["last_status"] = r["status"]
+            metrics["last_provider"] = r["provider"]
+            metrics["last_model"] = r["model"]
+            metrics["last_error"] = r.get("error_message")
     except Exception:
         logger.warning("Failed to query last run for agent=%s", agent_name)
 
     try:
-        result = await db.execute(
-            text(
-                "SELECT COUNT(*) FROM agent_conversations "
-                "WHERE agent_name = :agent AND user_id = :uid"
-            ),
-            {"agent": agent_name, "uid": user_id},
+        rows = await bridge._mysql(
+            "SELECT COUNT(*) as cnt FROM agent_conversations "
+            "WHERE agent_name = %s AND user_id = %s",
+            (agent_name, user_id),
         )
-        metrics["conversation_count"] = result.scalar() or 0
+        if rows:
+            metrics["conversation_count"] = int(rows[0]["cnt"] or 0)
     except Exception:
         logger.warning("Failed to count conversations for agent=%s", agent_name)
 

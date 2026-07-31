@@ -1,17 +1,14 @@
-"""Document management endpoints — upload, list, get, delete, download, search, summarize."""
 import os
 import uuid
 import logging
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, field_validator
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.db import get_db
 from app.core.deps import require_role
 from app.ai.llm_providers import call_llm
+from app.services.java_bridge import bridge
 
 logger = logging.getLogger("stratroom.documents")
 
@@ -30,7 +27,6 @@ def _safe_filename(filename: str) -> str:
 
 
 def _validate_storage_path(path: str) -> str:
-    """Ensure storage path doesn't escape the storage directory."""
     real_storage = os.path.realpath(STORAGE_DIR)
     real_path = os.path.realpath(path)
     if not real_path.startswith(real_storage + os.sep) and real_path != real_storage:
@@ -39,7 +35,6 @@ def _validate_storage_path(path: str) -> str:
 
 
 async def _extract_text(content: bytes, ext: str) -> str:
-    """Best-effort text extraction. Returns empty string on failure."""
     if ext == "pdf":
         try:
             import fitz
@@ -77,11 +72,11 @@ async def _extract_text(content: bytes, ext: str) -> str:
 @router.post("/upload")
 async def upload_document(
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("manager")),
 ):
     user_id = ctx["user_id"]
     org_id = ctx["org_id"]
+    uploaded_by = ctx.get("full_name", "")
 
     filename = file.filename or "document"
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
@@ -105,24 +100,18 @@ async def upload_document(
 
     extracted = await _extract_text(content, ext)
 
-    result = await db.execute(
-        text(
-            "INSERT INTO documents (org_id, user_id, filename, original_filename, content_type, file_size, extracted_text, storage_path) "
-            "VALUES (:org_id, :user_id, :filename, :original, :ctype, :size, :text, :path) RETURNING id"
-        ),
-        {
-            "org_id": org_id,
-            "user_id": user_id,
-            "filename": safe_name,
-            "original": filename,
-            "ctype": file.content_type or f"application/{ext}",
-            "size": len(content),
-            "text": extracted,
-            "path": storage_path,
-        },
-    )
-    await db.commit()
-    doc_id = result.scalar()
+    resp = await bridge.post(bridge.db_service, "/documents/upload", json={
+        "org_id": org_id,
+        "user_id": user_id,
+        "filename": safe_name,
+        "original_filename": filename,
+        "content_type": file.content_type or f"application/{ext}",
+        "file_size": len(content),
+        "extracted_text": extracted,
+        "storage_path": storage_path,
+        "uploaded_by": uploaded_by,
+    })
+    doc_id = resp.get("id") if isinstance(resp, dict) else None
 
     logger.info("Document uploaded: id=%s user=%s file=%s size=%d", doc_id, user_id, filename, len(content))
 
@@ -137,209 +126,123 @@ async def upload_document(
 
 @router.get("")
 async def list_documents(
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    user_id = ctx["user_id"]
-    org_id = ctx["org_id"]
-    is_admin = ctx["is_admin"]
-    is_manager = ctx["is_manager"]
-
-    if is_admin or is_manager:
-        result = await db.execute(
-            text(
-                "SELECT d.id, d.original_filename, d.content_type, d.file_size, d.created_at, "
-                "u.full_name AS uploaded_by "
-                "FROM documents d LEFT JOIN users u ON d.user_id = u.id "
-                "WHERE d.org_id = :org_id ORDER BY d.created_at DESC LIMIT 100"
-            ),
-            {"org_id": org_id},
-        )
-    else:
-        result = await db.execute(
-            text(
-                "SELECT d.id, d.original_filename, d.content_type, d.file_size, d.created_at, "
-                "u.full_name AS uploaded_by "
-                "FROM documents d LEFT JOIN users u ON d.user_id = u.id "
-                "WHERE d.org_id = :org_id AND d.user_id = :user_id ORDER BY d.created_at DESC LIMIT 100"
-            ),
-            {"org_id": org_id, "user_id": user_id},
-        )
-    rows = result.mappings().all()
-    return {"documents": [dict(r) for r in rows]}
+    result = await bridge.get(
+        bridge.db_service, "/documents",
+        params={
+            "org_id": ctx["org_id"],
+            "user_id": ctx["user_id"],
+            "is_admin": ctx["is_admin"],
+            "is_manager": ctx["is_manager"],
+        },
+    )
+    return {"documents": result if isinstance(result, list) else []}
 
 
 @router.get("/search")
 async def search_documents(
     q: str = Query(..., min_length=1, max_length=200),
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    user_id = ctx["user_id"]
-    org_id = ctx["org_id"]
-    is_admin = ctx["is_admin"]
-    is_manager = ctx["is_manager"]
-    search_term = f"%{q}%"
-
-    if is_admin or is_manager:
-        result = await db.execute(
-            text(
-                "SELECT d.id, d.original_filename, d.content_type, d.file_size, d.created_at, "
-                "u.full_name AS uploaded_by "
-                "FROM documents d LEFT JOIN users u ON d.user_id = u.id "
-                "WHERE d.org_id = :org_id "
-                "AND (d.original_filename ILIKE :q OR d.extracted_text ILIKE :q "
-                "OR EXISTS (SELECT 1 FROM document_summaries ds WHERE ds.document_id = d.id AND ds.summary ILIKE :q)) "
-                "ORDER BY d.created_at DESC LIMIT 50"
-            ),
-            {"org_id": org_id, "q": search_term},
-        )
-    else:
-        result = await db.execute(
-            text(
-                "SELECT d.id, d.original_filename, d.content_type, d.file_size, d.created_at, "
-                "u.full_name AS uploaded_by "
-                "FROM documents d LEFT JOIN users u ON d.user_id = u.id "
-                "WHERE d.org_id = :org_id AND d.user_id = :user_id "
-                "AND (d.original_filename ILIKE :q OR d.extracted_text ILIKE :q "
-                "OR EXISTS (SELECT 1 FROM document_summaries ds WHERE ds.document_id = d.id AND ds.summary ILIKE :q)) "
-                "ORDER BY d.created_at DESC LIMIT 50"
-            ),
-            {"org_id": org_id, "user_id": user_id, "q": search_term},
-        )
-    rows = result.mappings().all()
-    return {"documents": [dict(r) for r in rows], "query": q}
+    result = await bridge.get(
+        bridge.db_service, "/documents/search",
+        params={
+            "q": q,
+            "org_id": ctx["org_id"],
+            "user_id": ctx["user_id"],
+            "is_admin": ctx["is_admin"],
+            "is_manager": ctx["is_manager"],
+        },
+    )
+    return {"documents": result if isinstance(result, list) else [], "query": q}
 
 
 @router.get("/{document_id}")
 async def get_document(
     document_id: int,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    user_id = ctx["user_id"]
-    org_id = ctx["org_id"]
-    is_admin = ctx["is_admin"]
-    is_manager = ctx["is_manager"]
-
-    if is_admin or is_manager:
-        result = await db.execute(
-            text(
-                "SELECT d.id, d.original_filename, d.content_type, d.file_size, d.extracted_text, "
-                "d.created_at, u.full_name AS uploaded_by "
-                "FROM documents d LEFT JOIN users u ON d.user_id = u.id "
-                "WHERE d.id = :did AND d.org_id = :org_id"
-            ),
-            {"did": document_id, "org_id": org_id},
-        )
-    else:
-        result = await db.execute(
-            text(
-                "SELECT d.id, d.original_filename, d.content_type, d.file_size, d.extracted_text, "
-                "d.created_at, u.full_name AS uploaded_by "
-                "FROM documents d LEFT JOIN users u ON d.user_id = u.id "
-                "WHERE d.id = :did AND d.org_id = :org_id AND d.user_id = :user_id"
-            ),
-            {"did": document_id, "org_id": org_id, "user_id": user_id},
-        )
-    row = result.first()
-    if not row:
+    result = await bridge.get(
+        bridge.db_service, f"/documents/{document_id}",
+        params={
+            "org_id": ctx["org_id"],
+            "user_id": ctx["user_id"],
+            "is_admin": ctx["is_admin"],
+            "is_manager": ctx["is_manager"],
+        },
+    )
+    if not result:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    summaries_result = await db.execute(
-        text(
-            "SELECT id, summary, provider, model, created_at "
-            "FROM document_summaries WHERE document_id = :did ORDER BY created_at DESC"
-        ),
-        {"did": document_id},
+    summaries = await bridge.get(
+        bridge.db_service, f"/documents/{document_id}/summaries",
     )
-    summaries = [dict(r) for r in summaries_result.mappings().all()]
-
-    doc = dict(row)
-    doc["summaries"] = summaries
+    doc = dict(result[0])
+    doc["summaries"] = summaries if isinstance(summaries, list) else []
     return doc
 
 
 @router.get("/{document_id}/download")
 async def download_document(
     document_id: int,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
     from fastapi.responses import FileResponse
 
-    user_id = ctx["user_id"]
-    org_id = ctx["org_id"]
-    is_admin = ctx["is_admin"]
-    is_manager = ctx["is_manager"]
-
-    if is_admin or is_manager:
-        result = await db.execute(
-            text(
-                "SELECT original_filename, storage_path, content_type "
-                "FROM documents WHERE id = :did AND org_id = :org_id"
-            ),
-            {"did": document_id, "org_id": org_id},
-        )
-    else:
-        result = await db.execute(
-            text(
-                "SELECT original_filename, storage_path, content_type "
-                "FROM documents WHERE id = :did AND org_id = :org_id AND user_id = :user_id"
-            ),
-            {"did": document_id, "org_id": org_id, "user_id": user_id},
-        )
-    row = result.first()
-    if not row:
+    result = await bridge.get(
+        bridge.db_service, f"/documents/{document_id}/download",
+        params={
+            "org_id": ctx["org_id"],
+            "user_id": ctx["user_id"],
+            "is_admin": ctx["is_admin"],
+            "is_manager": ctx["is_manager"],
+        },
+    )
+    if not result:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    path = row["storage_path"]
+    row = result[0]
+    path = row.get("storage_path")
     _validate_storage_path(path)
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File not found on disk")
 
     return FileResponse(
         path=path,
-        filename=row["original_filename"],
-        media_type=row["content_type"],
+        filename=row.get("original_filename"),
+        media_type=row.get("content_type"),
     )
 
 
 @router.delete("/{document_id}")
 async def delete_document(
     document_id: int,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("manager")),
 ):
-    user_id = ctx["user_id"]
-    org_id = ctx["org_id"]
-    is_admin = ctx["is_admin"]
-
-    if is_admin:
-        result = await db.execute(
-            text("SELECT storage_path FROM documents WHERE id = :did AND org_id = :org_id"),
-            {"did": document_id, "org_id": org_id},
-        )
-    else:
-        result = await db.execute(
-            text("SELECT storage_path FROM documents WHERE id = :did AND org_id = :org_id AND user_id = :user_id"),
-            {"did": document_id, "org_id": org_id, "user_id": user_id},
-        )
-    row = result.first()
-    if not row:
+    result = await bridge.get(
+        bridge.db_service, f"/documents/{document_id}",
+        params={
+            "org_id": ctx["org_id"],
+            "user_id": ctx["user_id"],
+            "is_admin": ctx["is_admin"],
+            "is_manager": ctx["is_manager"],
+        },
+    )
+    if not result:
         raise HTTPException(status_code=404, detail="Document not found or not yours to delete")
 
+    doc = result[0]
+    path = doc.get("storage_path")
     try:
-        path = row["storage_path"]
         _validate_storage_path(path)
         if os.path.exists(path):
             os.remove(path)
     except Exception:
-        logger.warning("Failed to delete file from disk: %s", row["storage_path"])
+        logger.warning("Failed to delete file from disk: %s", path)
 
-    await db.execute(text("DELETE FROM document_summaries WHERE document_id = :did"), {"did": document_id})
-    await db.execute(text("DELETE FROM documents WHERE id = :did AND org_id = :org_id"), {"did": document_id, "org_id": org_id})
-    await db.commit()
+    await bridge.delete(bridge.db_service, f"/documents/{document_id}/summaries")
+    await bridge.delete(bridge.db_service, f"/documents/{document_id}")
     return {"ok": True}
 
 
@@ -371,35 +274,25 @@ class SummarizeRequest(BaseModel):
 async def summarize_document(
     document_id: int,
     req: SummarizeRequest,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
     user_id = ctx["user_id"]
     org_id = ctx["org_id"]
-    is_admin = ctx["is_admin"]
-    is_manager = ctx["is_manager"]
 
-    if is_admin or is_manager:
-        result = await db.execute(
-            text(
-                "SELECT original_filename, extracted_text FROM documents "
-                "WHERE id = :did AND org_id = :org_id"
-            ),
-            {"did": document_id, "org_id": org_id},
-        )
-    else:
-        result = await db.execute(
-            text(
-                "SELECT original_filename, extracted_text FROM documents "
-                "WHERE id = :did AND org_id = :org_id AND user_id = :user_id"
-            ),
-            {"did": document_id, "org_id": org_id, "user_id": user_id},
-        )
-    row = result.first()
-    if not row:
+    result = await bridge.get(
+        bridge.db_service, f"/documents/{document_id}/text",
+        params={
+            "org_id": org_id,
+            "user_id": ctx["user_id"],
+            "is_admin": ctx["is_admin"],
+            "is_manager": ctx["is_manager"],
+        },
+    )
+    if not result:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    text_content = row["extracted_text"] or ""
+    doc = result[0]
+    text_content = doc.get("extracted_text") or ""
     if not text_content.strip():
         raise HTTPException(status_code=422, detail="No extractable text found in this document")
 
@@ -419,20 +312,17 @@ async def summarize_document(
             api_key=req.api_key,
             model=req.model,
             system_prompt=system_prompt,
-            messages=[{"role": "user", "content": f"Summarize this document ({row['original_filename']}):\n\n{truncated}"}],
+            messages=[{"role": "user", "content": f"Summarize this document ({doc.get('original_filename', '')}):\n\n{truncated}"}],
             max_tokens=2048,
         )
     except Exception:
         logger.exception("Document summarization failed [doc=%s user=%s]", document_id, user_id)
         raise HTTPException(status_code=502, detail="Summarization failed")
 
-    await db.execute(
-        text(
-            "INSERT INTO document_summaries (document_id, summary, provider, model) "
-            "VALUES (:did, :summary, :provider, :model)"
-        ),
-        {"did": document_id, "summary": summary[:10000], "provider": req.provider, "model": req.model},
-    )
-    await db.commit()
+    await bridge.post(bridge.db_service, f"/documents/{document_id}/summarize", json={
+        "summary": summary[:10000],
+        "provider": req.provider,
+        "model": req.model,
+    })
 
     return {"summary": summary, "provider": req.provider, "model": req.model}

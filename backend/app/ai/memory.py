@@ -1,13 +1,13 @@
 """AI Memory — long-term insight storage for agents.
 
-Stores meaningful insights from agent conversations, retrieves them for context
-enhancement, and prunes stale/low-value entries. All operations fail gracefully.
+Stores meaningful insights from agent conversations in MySQL, retrieves them
+for context enhancement, and prunes stale/low-value entries. All operations
+fail gracefully.
 """
 import logging
 import re
 
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from app.services.java_bridge import bridge
 
 logger = logging.getLogger("stratroom.ai.memory")
 
@@ -57,7 +57,6 @@ def _normalize(text_content: str) -> str:
 
 
 async def store_memory(
-    db: AsyncSession,
     *,
     user_id: int | None,
     org_id: int | None,
@@ -67,161 +66,137 @@ async def store_memory(
     confidence: float | None = None,
     message: str = "",
 ) -> bool:
-    """Store an insight. Returns True if stored, False if skipped (trivial/duplicate).
+    """Store an insight in MySQL ai_memory. Returns True if stored, False if skipped (trivial/duplicate).
 
     Never raises.
     """
     try:
-        async with db.begin_nested():
-            if not _is_insight_worthy(message, insight):
-                return False
+        if not _is_insight_worthy(message, insight):
+            return False
 
-            if confidence is None:
-                confidence = _compute_confidence(message, insight)
+        if confidence is None:
+            confidence = _compute_confidence(message, insight)
 
-            if confidence < CONFIDENCE_THRESHOLD:
-                return False
+        if confidence < CONFIDENCE_THRESHOLD:
+            return False
 
-            # Duplicate detection: check for existing insight with same prefix
-            prefix = _normalize(insight)
-            existing = await db.execute(
-                text(
-                    "SELECT id FROM ai_memory "
-                    "WHERE user_id = :uid AND agent_name = :agent "
-                    "AND LEFT(LOWER(insight), 80) = :prefix LIMIT 1"
-                ),
-                {"uid": user_id, "agent": agent_name, "prefix": prefix},
-            )
-            if existing.first():
-                return False
+        # Duplicate detection: check for existing insight with same prefix
+        prefix = _normalize(insight)
+        existing = await bridge._mysql(
+            "SELECT id FROM ai_memory "
+            "WHERE user_id = %s AND agent_name = %s "
+            "AND LEFT(LOWER(insight), 80) = %s LIMIT 1",
+            (user_id, agent_name, prefix),
+        )
+        if existing:
+            return False
 
-            await db.execute(
-                text(
-                    "INSERT INTO ai_memory (user_id, org_id, agent_name, insight, source, confidence) "
-                    "VALUES (:uid, :org_id, :agent, :insight, :source, :conf)"
-                ),
-                {
-                    "uid": user_id,
-                    "org_id": org_id,
-                    "agent": agent_name,
-                    "insight": insight[:5000],
-                    "source": source,
-                    "conf": confidence,
-                },
-            )
-            return True
+        await bridge._mysql_write(
+            "INSERT INTO ai_memory (user_id, org_id, agent_name, insight, source, confidence) "
+            "VALUES (%s, %s, %s, %s, %s, %s)",
+            (user_id, org_id, agent_name, insight[:5000], source, confidence),
+        )
+        return True
     except Exception:
         logger.exception("Failed to store memory")
         return False
 
 
 async def retrieve_memory(
-    db: AsyncSession,
     *,
     user_id: int | None,
     org_id: int | None,
     agent_name: str,
     limit: int = 10,
 ) -> list[dict]:
-    """Retrieve relevant memories for a user+agent, ranked by confidence and recency.
+    """Retrieve relevant memories from MySQL ai_memory, ranked by confidence and recency.
 
     Falls back to org-wide memories if no user-specific ones exist.
     Never raises.
     """
     try:
-        async with db.begin_nested():
-            # User-specific memories first
-            result = await db.execute(
-                text(
-                    "SELECT id, insight, confidence, source, created_at, access_count "
-                    "FROM ai_memory "
-                    "WHERE user_id = :uid AND agent_name = :agent "
-                    "ORDER BY confidence DESC, accessed_at DESC LIMIT :lim"
-                ),
-                {"uid": user_id, "agent": agent_name, "lim": limit},
+        # User-specific memories first
+        rows = await bridge._mysql(
+            "SELECT id, insight, confidence, source, created_at, access_count "
+            "FROM ai_memory "
+            "WHERE user_id = %s AND agent_name = %s "
+            "ORDER BY confidence DESC, accessed_at DESC LIMIT %s",
+            (user_id, agent_name, limit),
+        )
+
+        # Fall back to org-wide memories if few user-specific ones
+        if len(rows) < 3 and org_id:
+            org_rows = await bridge._mysql(
+                "SELECT id, insight, confidence, source, created_at, access_count "
+                "FROM ai_memory "
+                "WHERE org_id = %s AND agent_name = %s "
+                "AND (user_id IS NULL OR user_id != %s) "
+                "ORDER BY confidence DESC, accessed_at DESC LIMIT %s",
+                (org_id, agent_name, user_id, limit),
             )
-            rows = result.mappings().all()
+            existing_ids = {r["id"] for r in rows}
+            for r in org_rows:
+                if r["id"] not in existing_ids and len(rows) < limit:
+                    rows.append(r)
 
-            # Fall back to org-wide memories if few user-specific ones
-            if len(rows) < 3 and org_id:
-                result = await db.execute(
-                    text(
-                        "SELECT id, insight, confidence, source, created_at, access_count "
-                        "FROM ai_memory "
-                        "WHERE org_id = :org_id AND agent_name = :agent "
-                        "AND (user_id IS NULL OR user_id != :uid) "
-                        "ORDER BY confidence DESC, accessed_at DESC LIMIT :lim"
-                    ),
-                    {"org_id": org_id, "uid": user_id, "agent": agent_name, "lim": limit},
-                )
-                org_rows = result.mappings().all()
-                existing_ids = {r["id"] for r in rows}
-                for r in org_rows:
-                    if r["id"] not in existing_ids and len(rows) < limit:
-                        rows.append(r)
+        # Update access timestamps in fire-and-forget style
+        memory_ids = [r["id"] for r in rows]
+        if memory_ids:
+            await _update_access_batch(memory_ids)
 
-            # Update access timestamps in fire-and-forget style
-            memory_ids = [r["id"] for r in rows]
-            if memory_ids:
-                await _update_access_batch(db, memory_ids)
-
-            return [dict(r) for r in rows]
+        return rows
     except Exception:
         logger.exception("Failed to retrieve memory")
         return []
 
 
-async def _update_access_batch(db: AsyncSession, memory_ids: list[int]):
-    """Batch update access for multiple memory IDs."""
+async def _update_access_batch(memory_ids: list[int]):
+    """Batch update access for multiple memory IDs in MySQL."""
     try:
-        await db.execute(
-            text(
-                "UPDATE ai_memory SET access_count = access_count + 1, accessed_at = now() "
-                "WHERE id = ANY(:ids)"
-            ),
-            {"ids": memory_ids},
+        placeholders = ",".join(["%s"] * len(memory_ids))
+        await bridge._mysql_write(
+            f"UPDATE ai_memory SET access_count = access_count + 1, accessed_at = NOW() "
+            f"WHERE id IN ({placeholders})",
+            tuple(memory_ids),
         )
     except Exception:
         logger.exception("Failed to batch-update memory access")
 
 
 async def prune_memory(
-    db: AsyncSession,
     *,
     user_id: int | None,
     org_id: int | None,
     agent_name: str,
     max_memories: int = MAX_MEMORIES_PER_AGENT,
 ) -> int:
-    """Remove oldest/least-accessed memories when count exceeds max.
+    """Remove oldest/least-accessed memories from MySQL when count exceeds max.
 
     Returns number of pruned entries. Never raises.
     """
     try:
         # Count current memories
-        result = await db.execute(
-            text(
-                "SELECT COUNT(*) FROM ai_memory "
-                "WHERE user_id = :uid AND agent_name = :agent"
-            ),
-            {"uid": user_id, "agent": agent_name},
+        count_rows = await bridge._mysql(
+            "SELECT COUNT(*) as cnt FROM ai_memory "
+            "WHERE user_id = %s AND agent_name = %s",
+            (user_id, agent_name),
         )
-        count = result.scalar() or 0
+        count = count_rows[0]["cnt"] if count_rows else 0
 
         if count <= max_memories:
             return 0
 
         excess = count - max_memories
-        await db.execute(
-            text(
-                "DELETE FROM ai_memory WHERE id IN ("
-                "  SELECT id FROM ai_memory "
-                "  WHERE user_id = :uid AND agent_name = :agent "
-                "  ORDER BY access_count ASC, confidence ASC, created_at ASC "
-                "  LIMIT :excess"
-                ")"
-            ),
-            {"uid": user_id, "agent": agent_name, "excess": excess},
+        # MySQL requires JOIN for DELETE with LIMIT
+        await bridge._mysql_write(
+            "DELETE m FROM ai_memory m "
+            "JOIN ("
+            "  SELECT id FROM ai_memory "
+            "  WHERE user_id = %s AND agent_name = %s "
+            "  ORDER BY access_count ASC, confidence ASC, created_at ASC "
+            "  LIMIT %s"
+            ") AS to_delete ON m.id = to_delete.id",
+            (user_id, agent_name, excess),
         )
         logger.info("Pruned %d memories for user=%s agent=%s", excess, user_id, agent_name)
         return excess

@@ -19,40 +19,79 @@ async def query_user_tasks(
     status_filter: str | None = None,
     priority_filter: str | None = None,
     is_admin: bool = False,
+    email: str | None = None,
 ) -> dict:
-    """Query tasks for the current user.
+    """Query tasks from MySQL via the bridge.
 
-    Admin users see all tasks in the org. Members see only assigned tasks.
-    Returns a dict with 'tasks' list and 'summary' stats.
-    Optional filters: status ('pending', 'in_progress', 'completed'), priority.
+    Resolves the user's MySQL identity (emp_id, org_id) from their email.
+    Admin users see all tasks in their MySQL org.
+    Members see only tasks they own (t.owner = emp_id).
+
+    If the user has no MySQL employee record (e.g. PG-only admin),
+    returns empty results — safe fallback.
     """
-    where_clauses = ["org_id = :oid"]
-    params: dict = {"oid": org_id}
+    from app.services.java_bridge import bridge
+
+    # 1. Resolve MySQL identity from email
+    mysql_user = None
+    if email:
+        rows = await bridge._mysql(
+            "SELECT emp_id, org_id FROM employee_details "
+            "WHERE LOWER(email_address) = LOWER(%s) LIMIT 1",
+            (email,),
+        )
+        mysql_user = rows[0] if rows else None
+
+    # 2. Fail-safe: no MySQL identity → empty results
+    if not mysql_user:
+        return {"tasks": [], "summary": {
+            "total": 0, "pending": 0, "in_progress": 0,
+            "completed": 0, "critical": 0, "high": 0,
+        }}
+
+    mysql_org_id = mysql_user["org_id"]
+    emp_id = mysql_user["emp_id"]
+
+    # 3. Build query — org scoped via JOIN, always applied
+    where_clauses = ["e.org_id = %s"]
+    params = [mysql_org_id]
 
     if not is_admin:
-        where_clauses.append("assigned_user_id = :uid")
-        params["uid"] = user_id
+        where_clauses.append("t.owner = %s")
+        params.append(emp_id)
 
     if status_filter:
-        where_clauses.append("status = :status")
-        params["status"] = status_filter
+        where_clauses.append("t.status = %s")
+        params.append(status_filter)
     if priority_filter:
-        where_clauses.append("priority = :priority")
-        params["priority"] = priority_filter
+        where_clauses.append("t.priority = %s")
+        params.append(priority_filter)
 
     where_sql = " AND ".join(where_clauses)
 
-    result = await db.execute(
-        text(
-            f"SELECT id, title, agent, priority, owner, due_date, status, assigned_user_id "
-            f"FROM tasks WHERE {where_sql} "
-            f"ORDER BY CASE priority "
-            f"WHEN 'Critical' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 "
-            f"ELSE 4 END, id"
-        ),
-        params,
+    rows = await bridge._mysql(
+        "SELECT t.ID, t.task_value, t.owner, t.priority, t.status "
+        "FROM task_details t "
+        "JOIN employee_details e ON e.emp_id = t.owner "
+        f"WHERE {where_sql} "
+        "ORDER BY FIELD(t.priority, 'Critical', 'High', 'Medium', 'Low'), t.ID",
+        tuple(params),
     )
-    tasks = [dict(r) for r in result.mappings().all()]
+
+    # 4. Parse task_value JSON into output shape
+    tasks = []
+    for row in rows:
+        tv = bridge._parse_json_col(row, "task_value")
+        tasks.append({
+            "id": row.get("ID"),
+            "title": tv.get("Name", tv.get("title", "")),
+            "agent": tv.get("agent"),
+            "priority": row.get("priority"),
+            "owner": row.get("owner"),
+            "due_date": tv.get("dueDate"),
+            "status": row.get("status"),
+            "assigned_user_id": tv.get("assignedUserId"),
+        })
 
     summary = {
         "total": len(tasks),
@@ -73,64 +112,130 @@ async def update_task_progress(
     task_id: int,
     status: str | None = None,
     is_admin: bool = False,
+    email: str | None = None,
 ) -> dict:
-    """Update a task's status.
+    """Update a task's status in MySQL via the bridge.
 
-    Members can only update tasks assigned to them.
-    Admins can update any task in their org.
+    Resolves the user's MySQL identity (emp_id, org_id) from their email.
+    Uses JOIN with employee_details to verify the task belongs to the user's org.
+    Non-admin members can only update tasks they own (t.owner = emp_id).
+    Updates both the status column and the nested status inside task_value JSON.
 
     Valid statuses: 'pending', 'in_progress', 'completed'.
     Returns the updated task or an error dict.
     """
+    from app.services.java_bridge import bridge
+
     valid_statuses = {"pending", "in_progress", "completed"}
     if status and status not in valid_statuses:
         return {"error": f"Invalid status '{status}'. Must be one of: {', '.join(sorted(valid_statuses))}"}
 
+    # 1. Resolve MySQL identity from email
+    mysql_user = None
+    if email:
+        rows = await bridge._mysql(
+            "SELECT emp_id, org_id FROM employee_details "
+            "WHERE LOWER(email_address) = LOWER(%s) LIMIT 1",
+            (email,),
+        )
+        mysql_user = rows[0] if rows else None
+
+    if not mysql_user:
+        return {"error": "User not found in employee directory."}
+
+    mysql_org_id = mysql_user["org_id"]
+    emp_id = mysql_user["emp_id"]
+
+    # 2. Fetch task with org + ownership verification via JOIN
     if is_admin:
-        result = await db.execute(
-            text(
-                "SELECT id, title, status, priority, owner, due_date, assigned_user_id "
-                "FROM tasks WHERE id = :tid AND org_id = :oid"
-            ),
-            {"tid": task_id, "oid": org_id},
+        rows = await bridge._mysql(
+            "SELECT t.ID, t.task_value, t.status, t.priority, t.owner "
+            "FROM task_details t "
+            "JOIN employee_details e ON e.emp_id = t.owner "
+            "WHERE t.ID = %s AND e.org_id = %s",
+            (task_id, mysql_org_id),
         )
     else:
-        result = await db.execute(
-            text(
-                "SELECT id, title, status, priority, owner, due_date, assigned_user_id "
-                "FROM tasks WHERE id = :tid AND org_id = :oid AND assigned_user_id = :uid"
-            ),
-            {"tid": task_id, "oid": org_id, "uid": user_id},
+        rows = await bridge._mysql(
+            "SELECT t.ID, t.task_value, t.status, t.priority, t.owner "
+            "FROM task_details t "
+            "JOIN employee_details e ON e.emp_id = t.owner "
+            "WHERE t.ID = %s AND e.org_id = %s AND t.owner = %s",
+            (task_id, mysql_org_id, emp_id),
         )
-    task = result.mappings().first()
-    if not task:
+
+    if not rows:
         if is_admin:
             return {"error": f"Task {task_id} not found in your organization."}
         return {"error": f"This task is not yours. Task {task_id} is not assigned to you."}
 
-    task = dict(task)
-    old_status = task["status"]
+    task = rows[0]
+    old_status = task.get("status") or ""
+
+    # 3. Update if status changed
+    action = "no_change"
+    new_status = status if status else old_status
 
     if status and status != old_status:
+        # 3a. Update the status column — TOCTOU-safe: same org/owner scoping
         if is_admin:
-            await db.execute(
-                text("UPDATE tasks SET status = :status WHERE id = :tid AND org_id = :oid"),
-                {"status": status, "tid": task_id, "oid": org_id},
+            await bridge._mysql_write(
+                "UPDATE task_details t "
+                "JOIN employee_details e ON e.emp_id = t.owner "
+                "SET t.status = %s, t.updated_time = NOW() "
+                "WHERE t.ID = %s AND e.org_id = %s",
+                (status, task_id, mysql_org_id),
             )
         else:
-            await db.execute(
-                text("UPDATE tasks SET status = :status WHERE id = :tid AND org_id = :oid AND assigned_user_id = :uid"),
-                {"status": status, "tid": task_id, "oid": org_id, "uid": user_id},
+            await bridge._mysql_write(
+                "UPDATE task_details t "
+                "JOIN employee_details e ON e.emp_id = t.owner "
+                "SET t.status = %s, t.updated_time = NOW() "
+                "WHERE t.ID = %s AND e.org_id = %s AND t.owner = %s",
+                (status, task_id, mysql_org_id, emp_id),
             )
-        await db.commit()
-        task["status"] = status
 
-    action = "updated" if status and status != old_status else "no_change"
+        # 3b. Also update nested status inside task_value JSON for consistency
+        tv = bridge._parse_json_col(task, "task_value")
+        if tv:
+            tv["status"] = status
+            if is_admin:
+                await bridge._mysql_write(
+                    "UPDATE task_details t "
+                    "JOIN employee_details e ON e.emp_id = t.owner "
+                    "SET t.task_value = %s "
+                    "WHERE t.ID = %s AND e.org_id = %s",
+                    (json.dumps(tv), task_id, mysql_org_id),
+                )
+            else:
+                await bridge._mysql_write(
+                    "UPDATE task_details t "
+                    "JOIN employee_details e ON e.emp_id = t.owner "
+                    "SET t.task_value = %s "
+                    "WHERE t.ID = %s AND e.org_id = %s AND t.owner = %s",
+                    (json.dumps(tv), task_id, mysql_org_id, emp_id),
+                )
+
+        action = "updated"
+        new_status = status
+
+    # 4. Build response
+    tv = bridge._parse_json_col(task, "task_value")
+    task_resp = {
+        "id": task.get("ID"),
+        "title": tv.get("Name", tv.get("title", "")),
+        "status": new_status,
+        "priority": task.get("priority"),
+        "owner": task.get("owner"),
+        "due_date": tv.get("dueDate"),
+        "assigned_user_id": tv.get("assignedUserId"),
+    }
+
     return {
-        "task": task,
+        "task": task_resp,
         "action": action,
         "old_status": old_status,
-        "new_status": task["status"],
+        "new_status": new_status,
     }
 
 
@@ -144,14 +249,24 @@ async def create_task_tool(
     due_date: str | None = None,
     status: str = "pending",
     assigned_user_id: int | None = None,
+    email: str | None = None,
+    is_admin: bool = False,
 ) -> dict:
-    """Create a new task record in the database.
+    """Create a new task in MySQL via the bridge.
 
-    Priority must be one of: Critical, High, Medium, Low.
-    Status must be one of: pending, in_progress, completed.
-    Requires manager+ role (enforced at router level).
-    Returns the created task record.
+    Resolves the creator's MySQL identity from email. Owner can be
+    specified as an email string (resolved to emp_id). If no owner is
+    provided, defaults to the creator's emp_id.
+
+    Cross-org assignment is explicitly blocked — owner must belong to
+    the same org as the creator.
+
+    Priority: Critical, High, Medium, Low.
+    Status: pending, in_progress, completed.
+    Returns the created task record or an error dict.
     """
+    from app.services.java_bridge import bridge
+
     valid_priorities = {"Critical", "High", "Medium", "Low"}
     valid_statuses = {"pending", "in_progress", "completed"}
 
@@ -162,36 +277,61 @@ async def create_task_tool(
     if status not in valid_statuses:
         return {"error": f"Invalid status '{status}'. Must be one of: {', '.join(sorted(valid_statuses))}"}
 
-    # Verify assigned user if provided
-    if assigned_user_id is not None:
-        user_check = await db.execute(
-            text("SELECT id FROM users WHERE id = :uid AND org_id = :oid"),
-            {"uid": assigned_user_id, "oid": org_id},
+    # 1. Resolve creator's MySQL identity
+    mysql_user = None
+    if email:
+        rows = await bridge._mysql(
+            "SELECT emp_id, org_id FROM employee_details "
+            "WHERE LOWER(email_address) = LOWER(%s) LIMIT 1",
+            (email,),
         )
-        if not user_check.first():
-            return {"error": "Assigned user not found in this organization"}
+        mysql_user = rows[0] if rows else None
 
-    result = await db.execute(
-        text(
-            "INSERT INTO tasks (org_id, title, agent, priority, owner, due_date, status, assigned_user_id) "
-            "VALUES (:oid, :title, :agent, :priority, :owner, :due_date, :status, :assigned_user_id) "
-            "RETURNING id"
-        ),
-        {
-            "oid": org_id,
-            "title": title.strip(),
-            "agent": agent,
-            "priority": priority,
-            "owner": owner,
-            "due_date": due_date,
-            "status": status,
-            "assigned_user_id": assigned_user_id,
-        },
+    if not mysql_user:
+        return {"error": "User not found in employee directory."}
+
+    creator_org_id = mysql_user["org_id"]
+    creator_emp_id = mysql_user["emp_id"]
+
+    # 2. Resolve task owner
+    if owner and owner.strip():
+        owner_rows = await bridge._mysql(
+            "SELECT emp_id, org_id FROM employee_details "
+            "WHERE LOWER(email_address) = LOWER(%s) LIMIT 1",
+            (owner.strip(),),
+        )
+        if not owner_rows:
+            return {"error": f"Owner '{owner}' not found in employee directory."}
+
+        owner_emp_id = owner_rows[0]["emp_id"]
+        owner_org_id = owner_rows[0]["org_id"]
+
+        if owner_org_id != creator_org_id:
+            return {"error": "Cannot assign tasks to users outside your organization."}
+    else:
+        owner_emp_id = creator_emp_id
+
+    # 3. Build task_value JSON matching existing MySQL shape
+    task_value = {
+        "Name": title.strip(),
+        "status": status,
+        "priority": priority,
+    }
+    if agent:
+        task_value["agent"] = agent
+    if due_date:
+        task_value["dueDate"] = due_date
+    if assigned_user_id is not None:
+        task_value["assignedUserId"] = assigned_user_id
+
+    # 4. INSERT into MySQL
+    task_id = await bridge._mysql_write(
+        "INSERT INTO task_details (task_value, active, owner, created_time, updated_time, priority, status) "
+        "VALUES (%s, %s, %s, NOW(), NOW(), %s, %s)",
+        (json.dumps(task_value), 1, owner_emp_id, priority, status),
     )
-    task_id = result.scalar()
-    await db.commit()
 
-    logger.info("Task created via agent: id=%d org=%s", task_id, org_id)
+    logger.info("Task created via agent: id=%d org=%s owner_emp=%d", task_id, creator_org_id, owner_emp_id)
     return {
         "id": task_id,
         "title": title.strip(),

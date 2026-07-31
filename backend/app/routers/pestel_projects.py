@@ -1,16 +1,39 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.db import get_db
+
 from app.core.deps import require_role
 from app.core.config import settings
+from app.services.java_bridge import bridge
+
+logger = logging.getLogger("stratroom.pestel_projects")
 
 router = APIRouter(tags=["pestel", "projects"])
 
 VALID_PESTEL_CATEGORIES = {"political", "economic", "social", "technology", "environmental", "legal"}
 VALID_IMPACT_LEVELS = {"high", "medium", "low"}
 VALID_PROJECT_STATUSES = {"on_track", "at_risk", "ahead", "completed", "on-hold"}
+PG_TO_MYSQL_CATEGORY = {
+    "political": "Political",
+    "economic": "Economical",
+    "social": "Social",
+    "technology": "Technological",
+    "environmental": "Environmental",
+    "legal": "Legal",
+}
+PG_IMPACT_TO_MYSQL_FLAG = {
+    "high": "danger",
+    "medium": "warning",
+    "low": "success",
+}
+PG_STATUS_TO_MYSQL_STATUS = {
+    "on_track": "In Progress",
+    "at_risk": "Delayed",
+    "ahead": "In Progress",
+    "completed": "Completed",
+    "on-hold": "On Hold",
+}
 
 
 class PestelItemCreate(BaseModel):
@@ -23,7 +46,7 @@ class PestelItemCreate(BaseModel):
     def validate_category(cls, v: str) -> str:
         v = v.strip().lower()
         if v not in VALID_PESTEL_CATEGORIES:
-            raise ValueError(f"Invalid category: {v}. Must be one of: {', '.join(sorted(VALID_PESTEL_CATEGORIES))}")
+            raise ValueError(f"Invalid category: {v}")
         return v
 
     @field_validator("impact")
@@ -31,7 +54,7 @@ class PestelItemCreate(BaseModel):
     def validate_impact(cls, v: str) -> str:
         v = v.strip().lower()
         if v not in VALID_IMPACT_LEVELS:
-            raise ValueError(f"Invalid impact: {v}. Must be one of: {', '.join(sorted(VALID_IMPACT_LEVELS))}")
+            raise ValueError(f"Invalid impact: {v}")
         return v
 
     @field_validator("content")
@@ -85,92 +108,114 @@ class ProjectCreate(BaseModel):
     def validate_status(cls, v: str) -> str:
         v = v.strip()
         if v not in VALID_PROJECT_STATUSES:
-            raise ValueError(f"Invalid status: {v}. Must be one of: {', '.join(sorted(VALID_PROJECT_STATUSES))}")
+            raise ValueError(f"Invalid status: {v}")
         return v
 
 
 @router.get("/pestel")
 async def list_pestel_items(
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
     org_id = ctx["org_id"]
-    result = await db.execute(
-        text("SELECT id, category, impact, content, sort_order FROM pestel_items WHERE org_id = :oid ORDER BY CASE category WHEN 'political' THEN 1 WHEN 'economic' THEN 2 WHEN 'social' THEN 3 WHEN 'technology' THEN 4 WHEN 'environmental' THEN 5 WHEN 'legal' THEN 6 END, sort_order"),
-        {"oid": org_id},
-    )
-    rows = result.mappings().all()
-    return {"items": [dict(r) for r in rows]}
+    try:
+        data = await bridge.get(bridge.db_service, "/pestelList")
+        rows = data if isinstance(data, list) else data.get("items", data.get("list", []))
+        category_order = {"political": 1, "economic": 2, "social": 3, "technology": 4, "environmental": 5, "legal": 6}
+        items = []
+        for r in rows:
+            c = (r.get("category") or "").lower()
+            items.append({
+                "id": r.get("id"),
+                "category": c,
+                "impact": (r.get("impact") or "medium").lower(),
+                "content": r.get("content") or "",
+                "sort_order": category_order.get(c, 7),
+            })
+        items.sort(key=lambda x: (category_order.get(x["category"], 7), x["sort_order"]))
+    except Exception as exc:
+        logger.warning("Failed to query PESTEL via bridge: %s", exc)
+        items = []
+    return {"items": items}
 
 
 @router.post("/pestel")
 async def add_pestel_item(
     payload: PestelItemCreate,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("manager")),
 ):
-    org_id = ctx["org_id"]
-    result = await db.execute(
-        text("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM pestel_items WHERE org_id = :oid AND category = :c"),
-        {"oid": org_id, "c": payload.category},
-    )
-    next_order = result.scalar()
-    await db.execute(
-        text("INSERT INTO pestel_items (org_id, category, impact, content, sort_order) VALUES (:oid, :c, :i, :co, :o)"),
-        {"oid": org_id, "c": payload.category, "i": payload.impact, "co": payload.content, "o": next_order},
-    )
-    await db.commit()
+    emp_id = ctx.get("user_id")
+    mysql_category = PG_TO_MYSQL_CATEGORY.get(payload.category, payload.category.capitalize())
+    mysql_impact = PG_IMPACT_TO_MYSQL_FLAG.get(payload.impact, "warning")
+    await bridge.post(bridge.db_service, "/pestelList", json={
+        "name": payload.content,
+        "status_flag": mysql_impact,
+        "active": 1,
+        "owner": emp_id,
+        "page_id": 0,
+        "flagType": mysql_category,
+    })
     return {"ok": True}
 
 
 @router.delete("/pestel/{item_id}")
 async def delete_pestel_item(
     item_id: int,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("admin")),
 ):
-    org_id = ctx["org_id"]
-    result = await db.execute(
-        text("DELETE FROM pestel_items WHERE id = :id AND org_id = :oid"),
-        {"id": item_id, "oid": org_id},
-    )
-    if result.rowcount == 0:
+    try:
+        await bridge.delete(bridge.db_service, f"/pestelList/{item_id}")
+    except Exception:
         raise HTTPException(status_code=404, detail="PESTEL item not found")
-    await db.commit()
     return {"ok": True}
 
 
 @router.get("/projects")
 async def list_projects(
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
     org_id = ctx["org_id"]
-    result = await db.execute(
-        text("SELECT id, name, owner, budget, progress, due_date, status, sort_order FROM projects WHERE org_id = :oid ORDER BY sort_order"),
-        {"oid": org_id},
-    )
-    rows = result.mappings().all()
-    return {"projects": [dict(r) for r in rows]}
+    try:
+        data = await bridge.get(bridge.db_service, "/projectsList")
+        rows = data if isinstance(data, list) else data.get("projects", data.get("list", []))
+        projects = []
+        for i, r in enumerate(rows):
+            projects.append({
+                "id": r.get("id"),
+                "name": r.get("name") or "",
+                "owner": r.get("owner") or "",
+                "budget": str(r.get("budget") or 0),
+                "progress": r.get("progress", 0),
+                "due_date": r.get("due_date") or "",
+                "status": r.get("status") or "on_track",
+                "sort_order": i + 1,
+            })
+    except Exception as exc:
+        logger.warning("Failed to query projects via bridge: %s", exc)
+        projects = []
+    return {"projects": projects}
 
 
 @router.post("/projects")
 async def add_project(
     payload: ProjectCreate,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("manager")),
 ):
-    org_id = ctx["org_id"]
-    result = await db.execute(
-        text("SELECT COALESCE(MAX(sort_order), 0) + 1 FROM projects WHERE org_id = :oid"),
-        {"oid": org_id},
-    )
-    next_order = result.scalar()
-    await db.execute(
-        text("INSERT INTO projects (org_id, name, owner, budget, progress, due_date, status, sort_order) VALUES (:oid, :n, :o, :b, :p, :d, :s, :so)"),
-        {"oid": org_id, "n": payload.name, "o": payload.owner, "b": payload.budget, "p": payload.progress, "d": payload.due_date, "s": payload.status, "so": next_order},
-    )
-    await db.commit()
+    emp_id = ctx.get("user_id")
+    mysql_status = PG_STATUS_TO_MYSQL_STATUS.get(payload.status, "Not Started")
+    await bridge.post(bridge.db_service, "/projectsList", json={
+        "projectName": payload.name,
+        "projectOwner": payload.owner,
+        "budget": str(payload.budget),
+        "status": mysql_status,
+        "enddate": payload.due_date,
+        "fromdate": payload.due_date,
+        "active": 1,
+        "owner": emp_id,
+        "page_id": 0,
+        "start_date": payload.due_date if payload.due_date else None,
+        "end_date": payload.due_date if payload.due_date else None,
+        "department_id": 0,
+    })
     return {"ok": True}
 
 
@@ -178,30 +223,27 @@ async def add_project(
 async def update_project(
     project_id: int,
     payload: ProjectCreate,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("manager")),
 ):
-    org_id = ctx["org_id"]
-    await db.execute(
-        text("UPDATE projects SET name=:n, owner=:o, budget=:b, progress=:p, due_date=:d, status=:s WHERE id=:id AND org_id=:oid"),
-        {"n": payload.name, "o": payload.owner, "b": payload.budget, "p": payload.progress, "d": payload.due_date, "s": payload.status, "id": project_id, "oid": org_id},
-    )
-    await db.commit()
+    mysql_status = PG_STATUS_TO_MYSQL_STATUS.get(payload.status, "Not Started")
+    await bridge.put(bridge.db_service, f"/projectsList/{project_id}", json={
+        "projectName": payload.name,
+        "projectOwner": payload.owner,
+        "budget": str(payload.budget),
+        "status": mysql_status,
+        "enddate": payload.due_date,
+        "fromdate": payload.due_date,
+    })
     return {"ok": True}
 
 
 @router.delete("/projects/{project_id}")
 async def delete_project(
     project_id: int,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("admin")),
 ):
-    org_id = ctx["org_id"]
-    result = await db.execute(
-        text("DELETE FROM projects WHERE id = :id AND org_id = :oid"),
-        {"id": project_id, "oid": org_id},
-    )
-    if result.rowcount == 0:
+    try:
+        await bridge.delete(bridge.db_service, f"/projectsList/{project_id}")
+    except Exception:
         raise HTTPException(status_code=404, detail="Project not found")
-    await db.commit()
     return {"ok": True}

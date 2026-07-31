@@ -1,348 +1,299 @@
-"""
-Compatibility Router — maps legacy frontend API paths to actual backend logic.
-
-The frontend (31may_index.html) was originally built for a different backend
-and calls endpoints like /stratroom/riskList/1, /stratroom/scoreCardList, etc.
-This router translates those calls to the actual FastAPI database logic.
-"""
-
 import logging
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.db import get_db
 from app.core.deps import require_role
+from app.services.java_bridge import bridge
 
 logger = logging.getLogger("stratroom.compat")
 
 router = APIRouter(prefix="/stratroom", tags=["compat"])
 
 
-# ── Master Value (GL accounts, dropdown data) ──
 @router.get("/masterValue")
 async def compat_master_value(
     value_type: str = Query(default="", alias="type"),
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    org_id = ctx["org_id"]
-
     if value_type == "GL_ACCOUNT":
-        result = await db.execute(
-            text(
-                "SELECT DISTINCT gl_account, gl_name "
-                "FROM budget_lines WHERE org_id = :oid "
-                "AND gl_account IS NOT NULL "
-                "ORDER BY gl_account"
-            ),
-            {"oid": org_id},
-        )
-        rows = result.mappings().all()
-        return {"values": [dict(r) for r in rows]}
-
+        data = await bridge.get(bridge.db_service, "/retrieveMasterValue")
+        rows = data if isinstance(data, list) else data.get("values", data.get("masterValues", []))
+        gl_values = [r for r in rows if r.get("glAccount") or r.get("gl_account")]
+        return {"values": gl_values}
     return {"values": []}
 
 
-# ── Scorecards ──
 @router.get("/scoreCardList")
 async def compat_scorecard_list(
     limit: int = Query(default=0),
     pageId: int = Query(default=0),
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    org_id = ctx["org_id"]
+    emp_id = ctx["user_id"]
     is_admin = ctx["is_admin"]
     is_manager = ctx["is_manager"]
-    user_id = ctx["user_id"]
 
     if is_admin or is_manager:
-        result = await db.execute(
-            text(
-                "SELECT id, perspective, kpi_name, target, actual, owner, status, assigned_user_id "
-                "FROM scorecards WHERE org_id = :oid ORDER BY id"
-            ),
-            {"oid": org_id},
-        )
+        data = await bridge.get(bridge.db_service, "/scoreCardList")
     else:
-        result = await db.execute(
-            text(
-                "SELECT id, perspective, kpi_name, target, actual, owner, status, assigned_user_id "
-                "FROM scorecards WHERE org_id = :oid AND assigned_user_id = :uid ORDER BY id"
-            ),
-            {"oid": org_id, "uid": user_id},
-        )
-    rows = result.mappings().all()
-    data = [dict(r) for r in rows]
+        data = await bridge.get(bridge.db_service, f"/scoreCardDetailList/{emp_id}")
+
+    rows = data if isinstance(data, list) else data.get("scorecards", data.get("list", []))
     if limit > 0:
-        data = data[:limit]
-    return {"scorecards": data}
+        rows = rows[:limit]
+    return {"scorecards": rows}
 
 
-# ── Risk List ──
+@router.get("/riskList")
+async def compat_risk_list_bare(
+    pageId: int = Query(default=0),
+    ctx: dict = Depends(require_role("member")),
+):
+    emp_id = ctx["user_id"]
+    is_admin = ctx["is_admin"]
+    is_manager = ctx["is_manager"]
+
+    if is_admin or is_manager:
+        data = await bridge.get(bridge.db_service, "/riskListView")
+    else:
+        data = await bridge.get(bridge.db_service, f"/riskList/{emp_id}")
+
+    rows = data if isinstance(data, list) else data.get("risks", data.get("list", []))
+    return {"risks": rows}
+
+
 @router.get("/riskList/{emp_id}")
 async def compat_risk_list(
     emp_id: int,
     pageId: int = Query(default=0),
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    org_id = ctx["org_id"]
     is_admin = ctx["is_admin"]
     is_manager = ctx["is_manager"]
 
     if is_admin or is_manager:
-        result = await db.execute(
-            text(
-                "SELECT id, name, owner, inherent_likelihood, inherent_impact, "
-                "residual_likelihood, residual_impact, description, mitigation "
-                "FROM risks WHERE org_id = :oid ORDER BY created_at DESC"
-            ),
-            {"oid": org_id},
-        )
+        data = await bridge.get(bridge.db_service, "/riskListView")
     else:
-        result = await db.execute(
-            text(
-                "SELECT id, name, owner, inherent_likelihood, inherent_impact, "
-                "residual_likelihood, residual_impact, description, mitigation "
-                "FROM risks WHERE org_id = :oid AND owner = :owner ORDER BY created_at DESC"
-            ),
-            {"oid": org_id, "owner": ctx["email"]},
-        )
-    rows = result.mappings().all()
-    return {"risks": [dict(r) for r in rows]}
+        data = await bridge.get(bridge.db_service, f"/riskList/{emp_id}")
+
+    rows = data if isinstance(data, list) else data.get("risks", data.get("list", []))
+    return {"risks": rows}
 
 
-# ── KPI List (returns scorecard summary by perspective) ──
+@router.get("/kpiList")
+async def compat_kpi_list_bare(
+    ctx: dict = Depends(require_role("member")),
+):
+    emp_id = ctx["user_id"]
+    is_admin = ctx["is_admin"]
+    is_manager = ctx["is_manager"]
+
+    if is_admin or is_manager:
+        data = await bridge.get(bridge.db_service, "/scoreCardList")
+    else:
+        data = await bridge.get(bridge.db_service, f"/scoreCardDetailList/{emp_id}")
+
+    rows = data if isinstance(data, list) else data.get("scorecards", data.get("list", []))
+    perspectives = {}
+    for r in rows:
+        p = r.get("perspective")
+        if not p:
+            continue
+        if p not in perspectives:
+            perspectives[p] = {"perspective": p, "avg_score": 0, "kpi_count": 0, "on_track": 0, "at_risk": 0, "critical": 0}
+        perspectives[p]["kpi_count"] += 1
+        status = (r.get("status") or "").lower()
+        if status in perspectives[p]:
+            perspectives[p][status] += 1
+    return {"kpis": list(perspectives.values())}
+
+
 @router.get("/kpiList/{emp_id}")
 async def compat_kpi_list(
     emp_id: int,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    org_id = ctx["org_id"]
     is_admin = ctx["is_admin"]
     is_manager = ctx["is_manager"]
-    user_id = ctx["user_id"]
 
     if is_admin or is_manager:
-        result = await db.execute(
-            text(
-                "SELECT perspective, "
-                "ROUND(AVG(actual)) as avg_score, "
-                "COUNT(*) as kpi_count, "
-                "SUM(CASE WHEN status = 'on-track' THEN 1 ELSE 0 END) as on_track, "
-                "SUM(CASE WHEN status = 'at-risk' THEN 1 ELSE 0 END) as at_risk, "
-                "SUM(CASE WHEN status = 'critical' THEN 1 ELSE 0 END) as critical "
-                "FROM scorecards WHERE org_id = :oid "
-                "GROUP BY perspective ORDER BY MIN(id)"
-            ),
-            {"oid": org_id},
-        )
+        data = await bridge.get(bridge.db_service, "/scoreCardList")
     else:
-        result = await db.execute(
-            text(
-                "SELECT perspective, "
-                "ROUND(AVG(actual)) as avg_score, "
-                "COUNT(*) as kpi_count, "
-                "SUM(CASE WHEN status = 'on-track' THEN 1 ELSE 0 END) as on_track, "
-                "SUM(CASE WHEN status = 'at-risk' THEN 1 ELSE 0 END) as at_risk, "
-                "SUM(CASE WHEN status = 'critical' THEN 1 ELSE 0 END) as critical "
-                "FROM scorecards WHERE org_id = :oid AND assigned_user_id = :uid "
-                "GROUP BY perspective ORDER BY MIN(id)"
-            ),
-            {"oid": org_id, "uid": user_id},
-        )
-    rows = result.mappings().all()
-    return {"kpis": [dict(r) for r in rows]}
+        data = await bridge.get(bridge.db_service, f"/scoreCardDetailList/{emp_id}")
+
+    rows = data if isinstance(data, list) else data.get("scorecards", data.get("list", []))
+    perspectives = {}
+    for r in rows:
+        p = r.get("perspective")
+        if not p:
+            continue
+        if p not in perspectives:
+            perspectives[p] = {"perspective": p, "avg_score": 0, "kpi_count": 0, "on_track": 0, "at_risk": 0, "critical": 0}
+        perspectives[p]["kpi_count"] += 1
+        status = (r.get("status") or "").lower()
+        if status in perspectives[p]:
+            perspectives[p][status] += 1
+    return {"kpis": list(perspectives.values())}
 
 
-# ── Initiatives List ──
 @router.get("/initiativesList")
 async def compat_initiatives_list(
     pageId: int = Query(default=0),
     loadFlag: str = Query(default=""),
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    org_id = ctx["org_id"]
-    result = await db.execute(
-        text(
-            "SELECT id, name, percent_complete, budget_planned, budget_actual, status "
-            "FROM initiatives WHERE org_id = :oid ORDER BY id"
-        ),
-        {"oid": org_id},
-    )
-    rows = result.mappings().all()
-    return {"initiatives": [dict(r) for r in rows]}
+    emp_id = ctx["user_id"]
+    data = await bridge.get(bridge.db_service, f"/initiativesList/{emp_id}")
+    rows = data if isinstance(data, list) else data.get("initiatives", data.get("list", []))
+    return {"initiatives": rows}
 
 
-# ── Budgets List ──
+@router.get("/budgetsList")
+async def compat_budgets_list_bare(
+    ctx: dict = Depends(require_role("member")),
+):
+    emp_id = ctx["user_id"]
+    is_admin = ctx["is_admin"]
+    is_manager = ctx["is_manager"]
+
+    if is_admin or is_manager:
+        data = await bridge.get(bridge.db_service, "/budgetsListview")
+    else:
+        data = await bridge.get(bridge.db_service, f"/budgets/{emp_id}")
+
+    rows = data if isinstance(data, list) else data.get("budgets", data.get("list", []))
+    return {"budgets": rows}
+
+
 @router.get("/budgetsList/{page_id}")
 async def compat_budgets_list(
     page_id: int,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    org_id = ctx["org_id"]
+    emp_id = ctx["user_id"]
     is_admin = ctx["is_admin"]
     is_manager = ctx["is_manager"]
 
     if is_admin or is_manager:
-        result = await db.execute(
-            text(
-                "SELECT id, year, month, gl_account, gl_name, budget_type, project, total, department, employee, notes "
-                "FROM budget_lines WHERE org_id = :oid ORDER BY year, id"
-            ),
-            {"oid": org_id},
-        )
+        data = await bridge.get(bridge.db_service, "/budgetsListview")
     else:
-        result = await db.execute(
-            text(
-                "SELECT id, year, month, gl_account, gl_name, budget_type, project, total, department, employee, notes "
-                "FROM budget_lines WHERE org_id = :oid AND employee = :email ORDER BY year, id"
-            ),
-            {"oid": org_id, "email": ctx["email"]},
-        )
-    rows = result.mappings().all()
-    return {"budgets": [dict(r) for r in rows]}
+        data = await bridge.get(bridge.db_service, f"/budgets/{emp_id}")
+
+    rows = data if isinstance(data, list) else data.get("budgets", data.get("list", []))
+    return {"budgets": rows}
 
 
-# ── Audit Management List ──
 @router.get("/auditManagementList")
-async def compat_audit_list(
-    db: AsyncSession = Depends(get_db),
-    ctx: dict = Depends(require_role("member")),
-):
-    org_id = ctx["org_id"]
-    is_admin = ctx["is_admin"]
-    is_manager = ctx["is_manager"]
-    user_id = ctx["user_id"]
-
-    if is_admin or is_manager:
-        result = await db.execute(
-            text(
-                "SELECT id, title, severity, owner, due_date, status, assigned_user_id "
-                "FROM audit_findings WHERE org_id = :oid "
-                "ORDER BY CASE severity WHEN 'Critical' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 ELSE 4 END, id"
-            ),
-            {"oid": org_id},
-        )
-    else:
-        result = await db.execute(
-            text(
-                "SELECT id, title, severity, owner, due_date, status, assigned_user_id "
-                "FROM audit_findings WHERE org_id = :oid AND assigned_user_id = :uid "
-                "ORDER BY CASE severity WHEN 'Critical' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 ELSE 4 END, id"
-            ),
-            {"oid": org_id, "uid": user_id},
-        )
-    rows = result.mappings().all()
-    return {"findings": [dict(r) for r in rows]}
+async def compat_audit_list(ctx: dict = Depends(require_role("member"))):
+    data = await bridge.get(bridge.db_service, "/auditManagementList")
+    rows = data if isinstance(data, list) else data.get("findings", data.get("auditManagement", data.get("list", [])))
+    return {"findings": rows}
 
 
-# ── Risk Event List (incidents) ──
 @router.get("/riskeventlist")
-async def compat_risk_event_list(
-    db: AsyncSession = Depends(get_db),
+async def compat_risk_event_list(ctx: dict = Depends(require_role("member"))):
+    data = await bridge.get(bridge.db_service, "/riskeventlist")
+    rows = data if isinstance(data, list) else data.get("incidents", data.get("list", []))
+    return {"incidents": rows}
+
+
+@router.get("/retrieveTaskList")
+async def compat_task_list_bare(
     ctx: dict = Depends(require_role("member")),
 ):
-    org_id = ctx["org_id"]
-    result = await db.execute(
-        text(
-            "SELECT id, code, title, severity, status, region, mttr_hours, sla_hours "
-            "FROM incidents WHERE org_id = :oid ORDER BY created_at DESC"
-        ),
-        {"oid": org_id},
-    )
-    rows = result.mappings().all()
-    return {"incidents": [dict(r) for r in rows]}
+    emp_id = ctx["user_id"]
+    data = await bridge.get(bridge.db_service, f"/retrieveTaskList/{emp_id}")
+    rows = data if isinstance(data, list) else data.get("tasks", data.get("list", []))
+    return {"tasks": rows}
 
 
-# ── Retrieve Task List ──
 @router.get("/retrieveTaskList/{emp_id}")
 async def compat_task_list(
     emp_id: int,
     dateRange: str = Query(default="current"),
     task_type: str = Query(default="all", alias="type"),
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    org_id = ctx["org_id"]
-    is_admin = ctx["is_admin"]
-    is_manager = ctx["is_manager"]
-    user_id = ctx["user_id"]
-
-    if is_admin or is_manager:
-        result = await db.execute(
-            text(
-                "SELECT id, title, agent, priority, owner, due_date, status, assigned_user_id "
-                "FROM tasks WHERE org_id = :oid "
-                "ORDER BY CASE priority WHEN 'Critical' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 ELSE 4 END, id"
-            ),
-            {"oid": org_id},
-        )
-    else:
-        result = await db.execute(
-            text(
-                "SELECT id, title, agent, priority, owner, due_date, status, assigned_user_id "
-                "FROM tasks WHERE org_id = :oid AND assigned_user_id = :uid "
-                "ORDER BY CASE priority WHEN 'Critical' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 ELSE 4 END, id"
-            ),
-            {"oid": org_id, "uid": user_id},
-        )
-    rows = result.mappings().all()
-    return {"tasks": [dict(r) for r in rows]}
+    data = await bridge.get(bridge.db_service, f"/retrieveTaskList/{emp_id}")
+    rows = data if isinstance(data, list) else data.get("tasks", data.get("list", []))
+    return {"tasks": rows}
 
 
-# ── Meeting Management List ──
+@router.get("/meetingManagementList")
+async def compat_meeting_list_bare(
+    ctx: dict = Depends(require_role("member")),
+):
+    emp_id = ctx["user_id"]
+    data = await bridge.get(bridge.db_service, f"/meetingManagementList/{emp_id}")
+    rows = data if isinstance(data, list) else data.get("meetings", data.get("list", []))
+    return {"meetings": rows}
+
+
 @router.get("/meetingManagementList/{emp_id}")
 async def compat_meeting_list(
     emp_id: int,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    org_id = ctx["org_id"]
-    is_admin = ctx["is_admin"]
-    is_manager = ctx["is_manager"]
-
-    if is_admin or is_manager:
-        result = await db.execute(
-            text(
-                "SELECT id, title, meeting_date, meeting_time, location, duration, attendees, priority "
-                "FROM meetings WHERE org_id = :oid ORDER BY id"
-            ),
-            {"oid": org_id},
-        )
-    else:
-        email = ctx["email"]
-        result = await db.execute(
-            text(
-                "SELECT id, title, meeting_date, meeting_time, location, duration, attendees, priority "
-                "FROM meetings WHERE org_id = :oid AND attendees ILIKE :email ORDER BY id"
-            ),
-            {"oid": org_id, "email": f"%{email}%"},
-        )
-    rows = result.mappings().all()
-    return {"meetings": [dict(r) for r in rows]}
+    data = await bridge.get(bridge.db_service, f"/meetingManagementList/{emp_id}")
+    rows = data if isinstance(data, list) else data.get("meetings", data.get("list", []))
+    return {"meetings": rows}
 
 
-# ── Retrieve Compliance Value ──
 @router.get("/retrieveComplinValue")
 async def compat_compliance_list(
     dateRange: str = Query(default="current"),
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    org_id = ctx["org_id"]
-    result = await db.execute(
-        text(
-            "SELECT id, name, description, score, status "
-            "FROM compliance_frameworks WHERE org_id = :oid ORDER BY id"
-        ),
-        {"oid": org_id},
-    )
-    rows = result.mappings().all()
-    return {"compliance": [dict(r) for r in rows]}
+    data = await bridge.get(bridge.db_service, "/compliance")
+    rows = data if isinstance(data, list) else data.get("compliance", data.get("list", []))
+    return {"compliance": rows}
+
+
+@router.get("/retrieveOrgChart")
+async def compat_org_chart(
+    ctx: dict = Depends(require_role("member")),
+):
+    data = await bridge.get(bridge.db_service, "/orgStructureList")
+    rows = data if isinstance(data, list) else data.get("org", data.get("list", []))
+    return {"org_chart": rows}
+
+
+@router.get("/retrieveSwot")
+async def compat_swot_list(
+    ctx: dict = Depends(require_role("member")),
+):
+    data = await bridge.get(bridge.db_service, "/swotList")
+    rows = data if isinstance(data, list) else data.get("items", data.get("list", []))
+    quadrant_order = {"strength": 1, "weakness": 2, "opportunity": 3, "threat": 4}
+    items = []
+    for r in rows:
+        q = (r.get("quadrant") or "").lower()
+        items.append({
+            "id": r.get("id"),
+            "quadrant": q,
+            "content": r.get("content") or "",
+            "sort_order": quadrant_order.get(q, 5),
+        })
+    items.sort(key=lambda x: (quadrant_order.get(x["quadrant"], 5), x["sort_order"]))
+    return {"items": items}
+
+
+@router.get("/retrievePestel")
+async def compat_pestel_list(
+    ctx: dict = Depends(require_role("member")),
+):
+    data = await bridge.get(bridge.db_service, "/pestelList")
+    rows = data if isinstance(data, list) else data.get("items", data.get("list", []))
+    category_order = {"political": 1, "economic": 2, "social": 3, "technology": 4, "environmental": 5, "legal": 6}
+    items = []
+    for r in rows:
+        c = (r.get("category") or "").lower()
+        items.append({
+            "id": r.get("id"),
+            "category": c,
+            "impact": (r.get("impact") or "medium").lower(),
+            "content": r.get("content") or "",
+            "sort_order": category_order.get(c, 7),
+        })
+    items.sort(key=lambda x: (category_order.get(x["category"], 7), x["sort_order"]))
+    return {"items": items}

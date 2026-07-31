@@ -1,8 +1,14 @@
+import logging
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.db import get_db
 from app.core.deps import require_role
+from app.services.java_bridge import bridge
+
+logger = logging.getLogger("stratroom.bcp")
 
 router = APIRouter(tags=["bcp"])
 
@@ -13,21 +19,18 @@ async def list_bcp_processes(
     ctx: dict = Depends(require_role("member")),
 ):
     org_id = ctx["org_id"]
-    result = await db.execute(
-        text("SELECT id, parent_id, name, owner, rto, rpo, mtd, impact, status, category FROM bcp_processes WHERE org_id = :oid ORDER BY sort_order"),
-        {"oid": org_id},
-    )
-    rows = [dict(r) for r in result.mappings().all()]
-    by_id = {r['id']: r for r in rows}
+    try:
+        data = await bridge.get(bridge.db_service, "/bcpList")
+        rows = data if isinstance(data, list) else data.get("processes", data.get("list", []))
+    except Exception as exc:
+        logger.warning("Failed to query BCP via bridge: %s", exc)
+        rows = []
+    by_id = {}
     for r in rows:
         r['children'] = []
-    roots = []
-    for r in rows:
-        pid = r['parent_id']
-        if pid and pid in by_id:
-            by_id[pid]['children'].append(r)
-        else:
-            roots.append(r)
+        r['parent_id'] = None
+        by_id[r.get('id')] = r
+    roots = [r for r in rows if not r.get('parent_id')]
     return {"processes": roots}
 
 
@@ -37,8 +40,10 @@ async def list_bcp_flat(
     ctx: dict = Depends(require_role("member")),
 ):
     org_id = ctx["org_id"]
-    result = await db.execute(
-        text("SELECT id, parent_id, name, owner, rto, rpo, mtd, impact, status, category FROM bcp_processes WHERE org_id = :oid ORDER BY sort_order"),
-        {"oid": org_id},
-    )
-    return {"processes": [dict(r) for r in result.mappings().all()]}
+    try:
+        data = await bridge.get(bridge.db_service, "/bcpList")
+        rows = data if isinstance(data, list) else data.get("processes", data.get("list", []))
+    except Exception as exc:
+        logger.warning("Failed to query BCP via bridge: %s", exc)
+        rows = []
+    return {"processes": rows}

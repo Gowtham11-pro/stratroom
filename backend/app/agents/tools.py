@@ -1,65 +1,55 @@
+import logging
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.java_bridge import bridge
+
+logger = logging.getLogger("stratroom.agent_tools")
+
+BRIDGE_MODULE_PATHS = {
+    "risks": "/riskListView",
+    "incidents": "/universalIncidentList",
+    "scorecards": "/scoreCardList",
+    "budgets": "/budgetsListview",
+    "tasks": "/retrieveTaskList/",
+    "meetings": "/meetingManagementList/",
+    "audit": "/auditManagementList",
+    "compliance": "/compliance",
+    "initiatives": "/initiativesList/",
+    "projects": "/projectsList",
+    "swot": "/swotList",
+    "pestel": "/pestelList",
+    "bcp": "/bcpList",
+}
+
+
+async def _fetch_bridge(module: str) -> list[dict] | None:
+    path = BRIDGE_MODULE_PATHS.get(module)
+    if not path:
+        return None
+    try:
+        data = await bridge.get(bridge.db_service, path)
+        rows = data if isinstance(data, list) else data.get(module, data.get("list", []))
+        return rows
+    except Exception as exc:
+        logger.warning("Bridge query failed for module %s: %s", module, exc)
+        return None
+
 
 async def fetch_module_data(db: AsyncSession, module: str, org_id: int | None = None) -> str:
-    queries = {
-        "risks": (
-            "SELECT id, name, owner, inherent_likelihood, inherent_impact, "
-            "residual_likelihood, residual_impact, description, mitigation "
-            "FROM risks WHERE org_id = :org_id ORDER BY (residual_likelihood * residual_impact) DESC"
-        ),
-        "incidents": (
-            "SELECT id, code, title, severity, status, region, mttr_hours, sla_hours "
-            "FROM incidents WHERE org_id = :org_id ORDER BY "
-            "CASE severity WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 ELSE 3 END, created_at DESC"
-        ),
-        "scorecards": (
-            "SELECT perspective, kpi_name, target, actual, owner, status "
-            "FROM scorecards WHERE org_id = :org_id ORDER BY perspective, kpi_name"
-        ),
-        "budgets": (
-            "SELECT gl_name, budget_type, project, total, department, notes "
-            "FROM budget_lines WHERE org_id = :org_id ORDER BY total DESC"
-        ),
-        "tasks": (
-            "SELECT id, title, agent, priority, owner, due_date, status "
-            "FROM tasks WHERE org_id = :org_id ORDER BY "
-            "CASE priority WHEN 'Critical' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 ELSE 4 END"
-        ),
-        "meetings": (
-            "SELECT id, title, meeting_date, meeting_time, location, duration, attendees, priority "
-            "FROM meetings WHERE org_id = :org_id ORDER BY meeting_date, meeting_time"
-        ),
-        "audit": (
-            "SELECT id, title, severity, owner, due_date, status "
-            "FROM audit_findings WHERE org_id = :org_id ORDER BY "
-            "CASE severity WHEN 'Critical' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 ELSE 4 END"
-        ),
-        "compliance": (
-            "SELECT id, name, description, score, status "
-            "FROM compliance_frameworks WHERE org_id = :org_id ORDER BY score ASC"
-        ),
-        "initiatives": (
-            "SELECT id, name, percent_complete, budget_planned, budget_actual, status "
-            "FROM initiatives WHERE org_id = :org_id ORDER BY status, percent_complete DESC"
-        ),
-        "projects": (
-            "SELECT id, name, owner, budget, progress, due_date, status "
-            "FROM projects WHERE org_id = :org_id ORDER BY "
-            "CASE status WHEN 'at_risk' THEN 1 WHEN 'on_track' THEN 2 WHEN 'ahead' THEN 3 ELSE 4 END"
-        ),
-        "swot": (
-            "SELECT quadrant, content FROM swot_items WHERE org_id = :org_id ORDER BY sort_order"
-        ),
-        "pestel": (
-            "SELECT category, impact, content FROM pestel_items WHERE org_id = :org_id ORDER BY sort_order"
-        ),
-        "bcp": (
-            "SELECT id, name, owner, rto, rpo, mtd, impact, status, category "
-            "FROM bcp_processes WHERE org_id = :org_id ORDER BY sort_order"
-        ),
-    }
+    # Try MySQL bridge first for supported modules
+    bridge_rows = await _fetch_bridge(module)
+    if bridge_rows is not None:
+        if not bridge_rows:
+            return f"[No data in {module}]"
+        lines = []
+        for d in bridge_rows:
+            parts = [f"{k}={v}" for k, v in d.items() if v is not None]
+            lines.append(" | ".join(parts))
+        return "\n".join(lines)
+
+    queries = {}
 
     sql = queries.get(module)
     if not sql:
@@ -90,7 +80,7 @@ async def fetch_module_data(db: AsyncSession, module: str, org_id: int | None = 
 
 AGENT_MODULE_MAP = {
     "strategy": ["scorecards", "initiatives", "projects", "swot", "pestel"],
-    "risk": ["risks", "incidents", "audit", "compliance"],
+    "risk": ["risks", "audit", "compliance"],
     "scorecard": ["scorecards", "initiatives", "projects"],
     "finance": ["budgets", "scorecards", "initiatives"],
     "compliance": ["compliance", "audit", "risks"],

@@ -43,6 +43,19 @@ class Settings:
     MAX_STRING_LENGTH: int = 10000
     MAX_PROMPT_LENGTH: int = 50000
 
+    # ── MySQL (Java business data) ──
+    MYSQL_HOST: str = os.getenv("MYSQL_HOST", "host.docker.internal")
+    MYSQL_PORT: int = int(os.getenv("MYSQL_PORT", "3306"))
+    MYSQL_USER: str = os.getenv("MYSQL_USER", "root")
+    MYSQL_PASSWORD: str = os.getenv("MYSQL_PASSWORD", "Admin#123")
+    MYSQL_DATABASE: str = os.getenv("MYSQL_DATABASE", "orgstructure")
+
+    # ── Java Service Bridge (legacy, kept for scorecard HTTP calls) ──
+    JAVA_AUTH_URL: str = os.getenv("JAVA_AUTH_URL", "http://host.docker.internal:9010")
+    JAVA_DB_URL: str = os.getenv("JAVA_DB_URL", "http://host.docker.internal:9040")
+    JAVA_USER_URL: str = os.getenv("JAVA_USER_URL", "http://host.docker.internal:9050")
+    JAVA_SCORECARD_URL: str = os.getenv("JAVA_SCORECARD_URL", "http://host.docker.internal:9060")
+
     # ── Rate Limiting ──
     RATE_LIMIT_PER_MINUTE: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
     RATE_LIMIT_AI_PER_MINUTE: int = int(os.getenv("RATE_LIMIT_AI_PER_MINUTE", "30"))
@@ -50,7 +63,7 @@ class Settings:
     # ── AI Providers ──
     ALLOWED_PROVIDERS: frozenset[str] = frozenset({
         "openai", "anthropic", "google", "deepseek", "moonshot",
-        "together", "mistral", "xai", "ollama",
+        "together", "mistral", "xai", "ollama", "mock",
     })
 
     # ── Storage ──

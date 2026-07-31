@@ -3,11 +3,9 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.db import get_db
 from app.core.deps import require_role
+from app.services.java_bridge import bridge
 
 logger = logging.getLogger("stratroom.complaints")
 
@@ -41,21 +39,21 @@ class ComplaintCreate(BaseModel):
     @classmethod
     def validate_category(cls, v: str) -> str:
         if v not in VALID_CATEGORIES:
-            raise ValueError(f"Invalid category: {v}. Must be one of: {', '.join(sorted(VALID_CATEGORIES))}")
+            raise ValueError(f"Invalid category: {v}")
         return v
 
     @field_validator("severity")
     @classmethod
     def validate_severity(cls, v: str) -> str:
         if v not in VALID_SEVERITIES:
-            raise ValueError(f"Invalid severity: {v}. Must be one of: {', '.join(sorted(VALID_SEVERITIES))}")
+            raise ValueError(f"Invalid severity: {v}")
         return v
 
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str) -> str:
         if v not in VALID_STATUSES:
-            raise ValueError(f"Invalid status: {v}. Must be one of: {', '.join(sorted(VALID_STATUSES))}")
+            raise ValueError(f"Invalid status: {v}")
         return v
 
 
@@ -75,152 +73,82 @@ class ComplaintUpdate(BaseModel):
             v = v.strip()
             if not v:
                 raise ValueError("Title cannot be empty")
-            if len(v) > 500:
-                raise ValueError("Title exceeds maximum length of 500")
         return v
 
     @field_validator("category")
     @classmethod
     def validate_category(cls, v: str | None) -> str | None:
         if v is not None and v not in VALID_CATEGORIES:
-            raise ValueError(f"Invalid category: {v}. Must be one of: {', '.join(sorted(VALID_CATEGORIES))}")
+            raise ValueError(f"Invalid category: {v}")
         return v
 
     @field_validator("severity")
     @classmethod
     def validate_severity(cls, v: str | None) -> str | None:
         if v is not None and v not in VALID_SEVERITIES:
-            raise ValueError(f"Invalid severity: {v}. Must be one of: {', '.join(sorted(VALID_SEVERITIES))}")
+            raise ValueError(f"Invalid severity: {v}")
         return v
 
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str | None) -> str | None:
         if v is not None and v not in VALID_STATUSES:
-            raise ValueError(f"Invalid status: {v}. Must be one of: {', '.join(sorted(VALID_STATUSES))}")
+            raise ValueError(f"Invalid status: {v}")
         return v
 
 
 @router.get("/complaints")
-async def list_complaints(
-    db: AsyncSession = Depends(get_db),
-    ctx: dict = Depends(require_role("member")),
-):
-    user_id = ctx["user_id"]
-    org_id = ctx["org_id"]
-    is_admin = ctx["is_admin"]
-    is_manager = ctx["is_manager"]
-
-    if is_admin or is_manager:
-        result = await db.execute(
-            text(
-                "SELECT id, title, description, category, severity, status, "
-                "assigned_user_id, submitted_by, created_at, resolved_at "
-                "FROM complaints WHERE org_id = :oid "
-                "ORDER BY "
-                "CASE severity "
-                "WHEN 'Critical' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 "
-                "ELSE 4 END, id"
-            ),
-            {"oid": org_id},
-        )
-    else:
-        result = await db.execute(
-            text(
-                "SELECT id, title, description, category, severity, status, "
-                "assigned_user_id, submitted_by, created_at, resolved_at "
-                "FROM complaints WHERE org_id = :oid AND assigned_user_id = :uid "
-                "ORDER BY "
-                "CASE severity "
-                "WHEN 'Critical' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 "
-                "ELSE 4 END, id"
-            ),
-            {"oid": org_id, "uid": user_id},
-        )
-    rows = result.mappings().all()
-    return {"complaints": [dict(r) for r in rows]}
+async def list_complaints(ctx: dict = Depends(require_role("member"))):
+    result = await bridge.get(
+        bridge.db_service, "/complaints",
+        params={
+            "org_id": ctx["org_id"],
+            "user_id": ctx["user_id"],
+            "is_admin": ctx["is_admin"],
+            "is_manager": ctx["is_manager"],
+        },
+    )
+    return {"complaints": result if result else []}
 
 
 @router.get("/complaints/{complaint_id}")
 async def get_complaint(
     complaint_id: int,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    user_id = ctx["user_id"]
-    org_id = ctx["org_id"]
-    is_admin = ctx["is_admin"]
-    is_manager = ctx["is_manager"]
-
-    if is_admin or is_manager:
-        result = await db.execute(
-            text(
-                "SELECT id, title, description, category, severity, status, "
-                "assigned_user_id, submitted_by, created_at, resolved_at "
-                "FROM complaints WHERE id = :cid AND org_id = :oid"
-            ),
-            {"cid": complaint_id, "oid": org_id},
-        )
-    else:
-        result = await db.execute(
-            text(
-                "SELECT id, title, description, category, severity, status, "
-                "assigned_user_id, submitted_by, created_at, resolved_at "
-                "FROM complaints WHERE id = :cid AND org_id = :oid AND assigned_user_id = :uid"
-            ),
-            {"cid": complaint_id, "oid": org_id, "uid": user_id},
-        )
-    row = result.mappings().first()
-    if not row:
-        raise HTTPException(status_code=404, detail="Complaint not found or not assigned to you")
-    return dict(row)
+    result = await bridge.get(
+        bridge.db_service, f"/complaints/{complaint_id}",
+        params={"org_id": ctx["org_id"]},
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+    return result[0]
 
 
 @router.post("/complaints", status_code=201)
 async def create_complaint(
     payload: ComplaintCreate,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("manager")),
 ):
-    org_id = ctx["org_id"]
-
-    if payload.assigned_user_id:
-        user_check = await db.execute(
-            text("SELECT id FROM users WHERE id = :uid AND org_id = :oid"),
-            {"uid": payload.assigned_user_id, "oid": org_id},
-        )
-        if not user_check.first():
-            raise HTTPException(status_code=400, detail="Assigned user not found in this organization")
-
-    result = await db.execute(
-        text(
-            "INSERT INTO complaints (org_id, title, description, category, severity, status, assigned_user_id, submitted_by) "
-            "VALUES (:oid, :title, :description, :category, :severity, :status, :assigned_user_id, :submitted_by) "
-            "RETURNING id"
-        ),
-        {
-            "oid": org_id,
-            "title": payload.title,
-            "description": payload.description,
-            "category": payload.category,
-            "severity": payload.severity,
-            "status": payload.status,
-            "assigned_user_id": payload.assigned_user_id,
-            "submitted_by": payload.submitted_by,
-        },
-    )
-    complaint_id = result.scalar()
-    await db.commit()
-
-    logger.info("Complaint created: id=%d org=%s by user=%s", complaint_id, org_id, ctx["user_id"])
-    return {"id": complaint_id, "ok": True}
+    record = {
+        "org_id": ctx["org_id"],
+        "title": payload.title,
+        "description": payload.description,
+        "category": payload.category,
+        "severity": payload.severity,
+        "status": payload.status,
+        "assigned_user_id": payload.assigned_user_id,
+        "submitted_by": payload.submitted_by,
+    }
+    await bridge.post(bridge.db_service, "/complaints", json=record)
+    logger.info("Complaint created org=%s by user=%s", ctx["org_id"], ctx["user_id"])
+    return {"ok": True}
 
 
 @router.put("/complaints/{complaint_id}")
 async def update_complaint(
     complaint_id: int,
     payload: ComplaintUpdate,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
     user_id = ctx["user_id"]
@@ -228,61 +156,27 @@ async def update_complaint(
     is_admin = ctx["is_admin"]
     is_manager = ctx["is_manager"]
 
-    if is_admin:
-        result = await db.execute(
-            text(
-                "SELECT id, assigned_user_id FROM complaints WHERE id = :cid AND org_id = :oid"
-            ),
-            {"cid": complaint_id, "oid": org_id},
-        )
-    else:
-        result = await db.execute(
-            text(
-                "SELECT id, assigned_user_id FROM complaints WHERE id = :cid AND org_id = :oid AND assigned_user_id = :uid"
-            ),
-            {"cid": complaint_id, "oid": org_id, "uid": user_id},
-        )
-    existing = result.mappings().first()
-    if not existing:
-        raise HTTPException(status_code=404, detail="This complaint is not yours.")
-
-    updates = {}
-    if payload.title is not None:
-        updates["title"] = payload.title
-    if payload.description is not None:
-        updates["description"] = payload.description
-    if payload.category is not None:
-        updates["category"] = payload.category
-    if payload.severity is not None:
-        updates["severity"] = payload.severity
-    if payload.status is not None:
-        updates["status"] = payload.status
-    if payload.submitted_by is not None:
-        updates["submitted_by"] = payload.submitted_by
-    if payload.assigned_user_id is not None:
-        if not is_admin:
-            raise HTTPException(status_code=403, detail="Only admins can reassign complaints")
-        user_check = await db.execute(
-            text("SELECT id FROM users WHERE id = :uid AND org_id = :oid"),
-            {"uid": payload.assigned_user_id, "oid": org_id},
-        )
-        if not user_check.first():
-            raise HTTPException(status_code=400, detail="Assigned user not found in this organization")
-        updates["assigned_user_id"] = payload.assigned_user_id
-
-    if not updates:
-        raise HTTPException(status_code=400, detail="No fields to update")
-
-    set_clause = ", ".join(f"{k} = :{k}" for k in updates)
-    updates["cid"] = complaint_id
-    updates["oid"] = org_id
-
-    await db.execute(
-        text(f"UPDATE complaints SET {set_clause} WHERE id = :cid AND org_id = :oid"),
-        updates,
+    existing = await bridge.get(
+        bridge.db_service, f"/complaints/{complaint_id}",
+        params={"org_id": org_id},
     )
-    await db.commit()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+    if not is_admin and not is_manager:
+        if existing[0].get("assigned_user_id") != user_id:
+            raise HTTPException(status_code=403, detail="You can only edit your own complaints")
 
+    current = existing[0]
+    record = {
+        "title": payload.title if payload.title is not None else current.get("title"),
+        "description": payload.description if payload.description is not None else current.get("description"),
+        "category": payload.category if payload.category is not None else current.get("category"),
+        "severity": payload.severity if payload.severity is not None else current.get("severity"),
+        "status": payload.status if payload.status is not None else current.get("status"),
+        "assigned_user_id": payload.assigned_user_id if payload.assigned_user_id is not None else current.get("assigned_user_id"),
+        "submitted_by": payload.submitted_by if payload.submitted_by is not None else current.get("submitted_by"),
+    }
+    await bridge.put(bridge.db_service, f"/complaints/{complaint_id}", json=record)
     logger.info("Complaint updated: id=%d org=%s by user=%s", complaint_id, org_id, user_id)
     return {"ok": True}
 
@@ -290,24 +184,15 @@ async def update_complaint(
 @router.delete("/complaints/{complaint_id}")
 async def delete_complaint(
     complaint_id: int,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("admin")),
 ):
     org_id = ctx["org_id"]
-    user_id = ctx["user_id"]
-
-    result = await db.execute(
-        text("SELECT id FROM complaints WHERE id = :cid AND org_id = :oid"),
-        {"cid": complaint_id, "oid": org_id},
+    existing = await bridge.get(
+        bridge.db_service, f"/complaints/{complaint_id}",
+        params={"org_id": org_id},
     )
-    if not result.first():
+    if not existing:
         raise HTTPException(status_code=404, detail="Complaint not found")
-
-    await db.execute(
-        text("DELETE FROM complaints WHERE id = :cid AND org_id = :oid"),
-        {"cid": complaint_id, "oid": org_id},
-    )
-    await db.commit()
-
-    logger.info("Complaint deleted: id=%d org=%s by user=%s", complaint_id, org_id, user_id)
+    await bridge.delete(bridge.db_service, f"/complaints/{complaint_id}")
+    logger.info("Complaint deleted: id=%d org=%s", complaint_id, org_id)
     return {"ok": True}

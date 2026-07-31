@@ -3,11 +3,9 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.db import get_db
 from app.core.deps import require_role
+from app.services.java_bridge import bridge
 
 logger = logging.getLogger("stratroom.audit")
 
@@ -39,14 +37,14 @@ class AuditFindingCreate(BaseModel):
     @classmethod
     def validate_severity(cls, v: str) -> str:
         if v not in VALID_SEVERITIES:
-            raise ValueError(f"Invalid severity: {v}. Must be one of: {', '.join(sorted(VALID_SEVERITIES))}")
+            raise ValueError(f"Invalid severity: {v}")
         return v
 
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str) -> str:
         if v not in VALID_STATUSES:
-            raise ValueError(f"Invalid status: {v}. Must be one of: {', '.join(sorted(VALID_STATUSES))}")
+            raise ValueError(f"Invalid status: {v}")
         return v
 
 
@@ -65,130 +63,59 @@ class AuditFindingUpdate(BaseModel):
             v = v.strip()
             if not v:
                 raise ValueError("Title cannot be empty")
-            if len(v) > 500:
-                raise ValueError("Title exceeds maximum length of 500")
         return v
 
     @field_validator("severity")
     @classmethod
     def validate_severity(cls, v: str | None) -> str | None:
         if v is not None and v not in VALID_SEVERITIES:
-            raise ValueError(f"Invalid severity: {v}. Must be one of: {', '.join(sorted(VALID_SEVERITIES))}")
+            raise ValueError(f"Invalid severity: {v}")
         return v
 
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str | None) -> str | None:
         if v is not None and v not in VALID_STATUSES:
-            raise ValueError(f"Invalid status: {v}. Must be one of: {', '.join(sorted(VALID_STATUSES))}")
+            raise ValueError(f"Invalid status: {v}")
         return v
 
 
 @router.get("/audit")
-async def list_audit_findings(
-    db: AsyncSession = Depends(get_db),
-    ctx: dict = Depends(require_role("member")),
-):
-    user_id = ctx["user_id"]
-    org_id = ctx["org_id"]
-    is_admin = ctx["is_admin"]
-    is_manager = ctx["is_manager"]
-
-    if is_admin or is_manager:
-        result = await db.execute(
-            text(
-                "SELECT id, title, severity, owner, due_date, status, assigned_user_id "
-                "FROM audit_findings WHERE org_id = :oid "
-                "ORDER BY CASE severity "
-                "WHEN 'Critical' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 "
-                "ELSE 4 END, id"
-            ),
-            {"oid": org_id},
-        )
-    else:
-        result = await db.execute(
-            text(
-                "SELECT id, title, severity, owner, due_date, status, assigned_user_id "
-                "FROM audit_findings WHERE org_id = :oid AND assigned_user_id = :uid "
-                "ORDER BY CASE severity "
-                "WHEN 'Critical' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 "
-                "ELSE 4 END, id"
-            ),
-            {"oid": org_id, "uid": user_id},
-        )
-    rows = result.mappings().all()
-    return {"findings": [dict(r) for r in rows]}
+async def list_audit_findings(ctx: dict = Depends(require_role("member"))):
+    data = await bridge.get(bridge.db_service, "/auditManagementList")
+    rows = data if isinstance(data, list) else data.get("findings", data.get("auditManagement", data.get("list", [])))
+    return {"findings": rows}
 
 
 @router.get("/audit/{finding_id}")
 async def get_audit_finding(
     finding_id: int,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    user_id = ctx["user_id"]
-    org_id = ctx["org_id"]
-    is_admin = ctx["is_admin"]
-    is_manager = ctx["is_manager"]
-
-    if is_admin or is_manager:
-        result = await db.execute(
-            text(
-                "SELECT id, title, severity, owner, due_date, status, assigned_user_id "
-                "FROM audit_findings WHERE id = :fid AND org_id = :oid"
-            ),
-            {"fid": finding_id, "oid": org_id},
-        )
-    else:
-        result = await db.execute(
-            text(
-                "SELECT id, title, severity, owner, due_date, status, assigned_user_id "
-                "FROM audit_findings WHERE id = :fid AND org_id = :oid AND assigned_user_id = :uid"
-            ),
-            {"fid": finding_id, "oid": org_id, "uid": user_id},
-        )
-    row = result.mappings().first()
-    if not row:
-        raise HTTPException(status_code=404, detail="Finding not found or not assigned to you")
-    return dict(row)
+    data = await bridge.get(bridge.db_service, f"/auditManagement/{finding_id}")
+    if not data:
+        raise HTTPException(status_code=404, detail="Finding not found")
+    return data if isinstance(data, dict) else {"finding": data}
 
 
 @router.post("/audit", status_code=201)
 async def create_audit_finding(
     payload: AuditFindingCreate,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("manager")),
 ):
-    org_id = ctx["org_id"]
-
-    if payload.assigned_user_id:
-        user_check = await db.execute(
-            text("SELECT id FROM users WHERE id = :uid AND org_id = :oid"),
-            {"uid": payload.assigned_user_id, "oid": org_id},
-        )
-        if not user_check.first():
-            raise HTTPException(status_code=400, detail="Assigned user not found in this organization")
-
-    result = await db.execute(
-        text(
-            "INSERT INTO audit_findings (org_id, title, severity, owner, due_date, status, assigned_user_id) "
-            "VALUES (:oid, :title, :severity, :owner, :due_date, :status, :assigned_user_id) "
-            "RETURNING id"
-        ),
-        {
-            "oid": org_id,
-            "title": payload.title,
-            "severity": payload.severity,
-            "owner": payload.owner,
-            "due_date": payload.due_date,
-            "status": payload.status,
-            "assigned_user_id": payload.assigned_user_id,
-        },
-    )
-    finding_id = result.scalar()
-    await db.commit()
-
-    logger.info("Audit finding created: id=%d org=%s by user=%s", finding_id, org_id, ctx["user_id"])
+    body = {
+        "title": payload.title,
+        "severity": payload.severity,
+        "owner": payload.owner or ctx["email"],
+        "dueDate": payload.due_date,
+        "status": payload.status,
+        "assignedUserId": payload.assigned_user_id or ctx["user_id"],
+        "empId": ctx["user_id"],
+        "orgId": ctx["org_id"],
+    }
+    result = await bridge.post(bridge.db_service, "/auditManagement", json=body)
+    finding_id = result.get("id")
+    logger.info("Audit finding created: id=%s by user=%s", finding_id, ctx["user_id"])
     return {"id": finding_id, "ok": True}
 
 
@@ -196,92 +123,40 @@ async def create_audit_finding(
 async def update_audit_finding(
     finding_id: int,
     payload: AuditFindingUpdate,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
-    user_id = ctx["user_id"]
-    org_id = ctx["org_id"]
-    is_admin = ctx["is_admin"]
-    is_manager = ctx["is_manager"]
-
-    if is_admin:
-        result = await db.execute(
-            text(
-                "SELECT id, assigned_user_id FROM audit_findings WHERE id = :fid AND org_id = :oid"
-            ),
-            {"fid": finding_id, "oid": org_id},
-        )
-    else:
-        result = await db.execute(
-            text(
-                "SELECT id, assigned_user_id FROM audit_findings WHERE id = :fid AND org_id = :oid AND assigned_user_id = :uid"
-            ),
-            {"fid": finding_id, "oid": org_id, "uid": user_id},
-        )
-    existing = result.mappings().first()
+    existing = await bridge.get(bridge.db_service, f"/auditManagement/{finding_id}")
     if not existing:
-        raise HTTPException(status_code=404, detail="This finding is not yours.")
+        raise HTTPException(status_code=404, detail="Finding not found")
 
-    updates = {}
+    body = {"id": finding_id}
     if payload.title is not None:
-        updates["title"] = payload.title
+        body["title"] = payload.title
     if payload.severity is not None:
-        updates["severity"] = payload.severity
+        body["severity"] = payload.severity
     if payload.owner is not None:
-        updates["owner"] = payload.owner
+        body["owner"] = payload.owner
     if payload.due_date is not None:
-        updates["due_date"] = payload.due_date
+        body["dueDate"] = payload.due_date
     if payload.status is not None:
-        updates["status"] = payload.status
+        body["status"] = payload.status
     if payload.assigned_user_id is not None:
-        if not is_admin:
-            raise HTTPException(status_code=403, detail="Only admins can reassign findings")
-        user_check = await db.execute(
-            text("SELECT id FROM users WHERE id = :uid AND org_id = :oid"),
-            {"uid": payload.assigned_user_id, "oid": org_id},
-        )
-        if not user_check.first():
-            raise HTTPException(status_code=400, detail="Assigned user not found in this organization")
-        updates["assigned_user_id"] = payload.assigned_user_id
+        body["assignedUserId"] = payload.assigned_user_id
 
-    if not updates:
-        raise HTTPException(status_code=400, detail="No fields to update")
-
-    set_clause = ", ".join(f"{k} = :{k}" for k in updates)
-    updates["fid"] = finding_id
-    updates["oid"] = org_id
-
-    await db.execute(
-        text(f"UPDATE audit_findings SET {set_clause} WHERE id = :fid AND org_id = :oid"),
-        updates,
-    )
-    await db.commit()
-
-    logger.info("Audit finding updated: id=%d org=%s by user=%s", finding_id, org_id, user_id)
+    await bridge.put(bridge.db_service, "/auditManagement", json=body)
+    logger.info("Audit finding updated: id=%d", finding_id)
     return {"ok": True}
 
 
 @router.delete("/audit/{finding_id}")
 async def delete_audit_finding(
     finding_id: int,
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("admin")),
 ):
-    org_id = ctx["org_id"]
-    user_id = ctx["user_id"]
-
-    result = await db.execute(
-        text("SELECT id FROM audit_findings WHERE id = :fid AND org_id = :oid"),
-        {"fid": finding_id, "oid": org_id},
-    )
-    if not result.first():
+    existing = await bridge.get(bridge.db_service, f"/auditManagement/{finding_id}")
+    if not existing:
         raise HTTPException(status_code=404, detail="Finding not found")
 
-    await db.execute(
-        text("DELETE FROM audit_findings WHERE id = :fid AND org_id = :oid"),
-        {"fid": finding_id, "oid": org_id},
-    )
-    await db.commit()
-
-    logger.info("Audit finding deleted: id=%d org=%s by user=%s", finding_id, org_id, user_id)
+    await bridge.delete(bridge.db_service, f"/auditManagement/{finding_id}")
+    logger.info("Audit finding deleted: id=%d", finding_id)
     return {"ok": True}

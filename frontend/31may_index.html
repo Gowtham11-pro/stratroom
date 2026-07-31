@@ -7468,6 +7468,36 @@ body.theme-light ::-webkit-scrollbar-thumb:hover {
         assignedProjects: ['DT001', 'MEA001']
     };
 
+    // Session validation + expiry handling (shared by all request paths)
+    function isTokenValid() {
+        var tok = (typeof getToken === 'function' ? getToken() : '')
+            || localStorage.getItem('stratroom_token')
+            || localStorage.getItem('api-token') || '';
+        if (!tok) return false;
+        try {
+            var parts = tok.split('.');
+            if (parts.length !== 3) return false;
+            var b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+            b64 += '='.repeat((4 - b64.length % 4) % 4);
+            var p = JSON.parse(atob(b64));
+            return !!p.exp && (p.exp * 1000 > Date.now());
+        } catch (e) { return false; }
+    }
+    window.isTokenValid = isTokenValid;
+
+    function handleSessionExpired() {
+        ['sr_backend_token', 'stratroom_token', 'api-token'].forEach(function(k) { localStorage.removeItem(k); });
+        ['user_name', 'user_role', 'user_dept', 'user_email', 'user_id', 'user_org_id',
+         'current_emp_id', 'current_page_id', 'stratroom_user_profile',
+         'stratroom_standalone_mode', 'stratroom_module_sync'].forEach(function(k) { localStorage.removeItem(k); });
+        var ls = document.getElementById('login-screen');
+        var sh = document.getElementById('shell');
+        if (ls) ls.classList.remove('hidden');
+        if (sh) sh.style.display = 'none';
+        if (typeof showToast === 'function') showToast('Session expired — please log in again.', 'error');
+    }
+    window.handleSessionExpired = handleSessionExpired;
+
     // ========== 2. PRE-EMBEDDED CONTEXTUAL PROMPTS LIBRARY ==========
     const PROMPT_LIBRARY = {
         dashboard: {
@@ -7905,6 +7935,9 @@ body.theme-light ::-webkit-scrollbar-thumb:hover {
 
     // ========== 9. INITIALIZE ALL MODULES ==========
     function initRoleAndPrompts() {
+        if (typeof window.isTokenValid === 'function' && !window.isTokenValid()) {
+            return; // no valid session — do not advertise a cached role
+        }
         const savedRole = localStorage.getItem('user_role');
         const savedDept = localStorage.getItem('user_dept');
         if (savedRole && ROLES[savedRole]) {
@@ -9623,17 +9656,17 @@ function sendRiskModuleChat() {
     container.appendChild(errDiv); container.scrollTop = container.scrollHeight;
     return;
   }
-  var ac=new AbortController();var to=setTimeout(function(){ac.abort();},60000);
+  var ac=new AbortController();var to=setTimeout(function(){ac.abort();},45000);
   fetch('/agents/chat', {
     method: 'POST',
     signal: ac.signal,
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('sr_backend_token') || localStorage.getItem('stratroom_token') || '') },
-    body: JSON.stringify({ agent: 'risk', message: msg, provider: cfg.provider, api_key: cfg.apiKey, model: cfg.model, conversation_id: _agentConversations['risk'] || null, base_url: cfg.baseUrl })
+    body: JSON.stringify({ agent: 'risk', message: msg, provider: cfg.provider, api_key: cfg.apiKey||'', model: cfg.model, conversation_id: _agentConversations['risk'] || null, base_url: cfg.baseUrl })
   }).then(function(r) { clearTimeout(to); return r.json(); }).then(function(data) {
     typingDiv.remove();
     if (data.error || data.detail) {
       var errD = document.createElement('div'); errD.style.cssText = 'display:flex; gap:8px;';
-      errD.innerHTML = '<div style="width:24px; height:24px; border-radius:6px; background:var(--surface); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:10px;">SR</div><div style="background:var(--surface); border:1px solid var(--border); border-radius:9px 9px 9px 3px; padding:9px 12px; font-size:12px; color:var(--red);">' + (data.error || data.detail || '').replace(/</g,'&lt;') + '</div>';
+      errD.innerHTML = '<div style="width:24px; height:24px; border-radius:6px; background:var(--surface); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:10px;">SR</div><div style="background:var(--surface); border:1px solid var(--border); border-radius:9px 9px 9px 3px; padding:9px 12px; font-size:12px; color:var(--red);">' + String(data.error || data.detail || '').replace(/</g,'&lt;') + '</div>';
       container.appendChild(errD); container.scrollTop = container.scrollHeight; return;
     }
     _agentConversations['risk'] = data.conversation_id;
@@ -9653,16 +9686,16 @@ function refreshRiskSignals() {
   el.innerHTML = '<div style="color:var(--text3);">🤖 Refreshing risk signals...</div>';
   var cfg = _getLLMConfig();
   if (!cfg.apiKey && cfg.provider !== 'ollama') { el.innerHTML = '<div style="color:var(--red);">Configure your LLM API key in Settings.</div>'; return; }
-  var ac=new AbortController();var to=setTimeout(function(){ac.abort();},60000);
+  var ac=new AbortController();var to=setTimeout(function(){ac.abort();},45000);
   fetch('/agents/chat', {
     method: 'POST',
     signal: ac.signal,
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('sr_backend_token') || localStorage.getItem('stratroom_token') || '') },
-    body: JSON.stringify({ agent: 'risk', message: 'List the top 3-4 current risk signals from the register. For each, give: signal name, current status, and one-line assessment. Format as bullet points.', provider: cfg.provider, api_key: cfg.apiKey, model: cfg.model, conversation_id: null, base_url: cfg.baseUrl })
+    body: JSON.stringify({ agent: 'risk', message: 'List the top 3-4 current risk signals from the register. For each, give: signal name, current status, and one-line assessment. Format as bullet points.', provider: cfg.provider, api_key: cfg.apiKey||'', model: cfg.model, conversation_id: null, base_url: cfg.baseUrl })
   }).then(function(r) { clearTimeout(to); return r.json(); }).then(function(data) {
-    if (data.error || data.detail) { el.innerHTML = '<div style="color:var(--red);">' + (data.error || data.detail || '').replace(/</g,'&lt;') + '</div>'; return; }
+    if (data.error || data.detail) { el.innerHTML = '<div style="color:var(--red);">' + String(data.error || data.detail || '').replace(/</g,'&lt;') + '</div>'; return; }
     el.innerHTML = '<div style="white-space:pre-wrap;font-size:12px;line-height:1.7;color:var(--text2)">' + (data.response || '').replace(/</g,'&lt;') + '</div>';
-  }).catch(function(e) { if(e.name!=='AbortError'){el.innerHTML = '<div style="color:var(--red);">Error: ' + (e.message || '').replace(/</g,'&lt;') + '</div>';}else{el.innerHTML='<div style="color:var(--red);">Request timed out. Check your LLM provider.</div>';} });
+  }).catch(function(e) { if(e.name!=='AbortError'&&!e.message?.includes('aborted')){el.innerHTML = '<div style="color:var(--red);">Error: ' + (e.message || '').replace(/</g,'&lt;') + '</div>';}else{el.innerHTML='<div style="color:var(--red);">Request timed out. Check your LLM provider.</div>';} });
 }
 function generateRiskRecommendations() {
   const el = document.getElementById('risk-recs-content');
@@ -9670,16 +9703,16 @@ function generateRiskRecommendations() {
   el.innerHTML = '<div style="color:var(--text3);">⚡ Generating fresh recommendations...</div>';
   var cfg = _getLLMConfig();
   if (!cfg.apiKey && cfg.provider !== 'ollama') { el.innerHTML = '<div style="color:var(--red);">Configure your LLM API key in Settings.</div>'; return; }
-  var ac=new AbortController();var to=setTimeout(function(){ac.abort();},60000);
+  var ac=new AbortController();var to=setTimeout(function(){ac.abort();},45000);
   fetch('/agents/chat', {
     method: 'POST',
     signal: ac.signal,
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('sr_backend_token') || localStorage.getItem('stratroom_token') || '') },
-    body: JSON.stringify({ agent: 'risk', message: 'Give 2-3 prioritized risk mitigation recommendations. For each: one-line action, owner, deadline. Format clearly.', provider: cfg.provider, api_key: cfg.apiKey, model: cfg.model, conversation_id: null, base_url: cfg.baseUrl })
+    body: JSON.stringify({ agent: 'risk', message: 'Give 2-3 prioritized risk mitigation recommendations. For each: one-line action, owner, deadline. Format clearly.', provider: cfg.provider, api_key: cfg.apiKey||'', model: cfg.model, conversation_id: null, base_url: cfg.baseUrl })
   }).then(function(r) { clearTimeout(to); return r.json(); }).then(function(data) {
-    if (data.error || data.detail) { el.innerHTML = '<div style="color:var(--red);">' + (data.error || data.detail || '').replace(/</g,'&lt;') + '</div>'; return; }
+    if (data.error || data.detail) { el.innerHTML = '<div style="color:var(--red);">' + String(data.error || data.detail || '').replace(/</g,'&lt;') + '</div>'; return; }
     el.innerHTML = '<div style="white-space:pre-wrap;font-size:12px;line-height:1.7;color:var(--text2)">' + (data.response || '').replace(/</g,'&lt;') + '</div>';
-  }).catch(function(e) { if(e.name!=='AbortError'){el.innerHTML = '<div style="color:var(--red);">Error: ' + (e.message || '').replace(/</g,'&lt;') + '</div>';}else{el.innerHTML='<div style="color:var(--red);">Request timed out. Check your LLM provider.</div>';} });
+  }).catch(function(e) { if(e.name!=='AbortError'&&!e.message?.includes('aborted')){el.innerHTML = '<div style="color:var(--red);">Error: ' + (e.message || '').replace(/</g,'&lt;') + '</div>';}else{el.innerHTML='<div style="color:var(--red);">Request timed out. Check your LLM provider.</div>';} });
 }
 function runDeepRiskAnalysis() {
   const out = document.getElementById('risk-analysis-output');
@@ -9688,16 +9721,16 @@ function runDeepRiskAnalysis() {
   out.innerHTML = '<span style="color:var(--text3);">🧠 Running deep risk analysis...</span>';
   var cfg = _getLLMConfig();
   if (!cfg.apiKey && cfg.provider !== 'ollama') { out.innerHTML = '<span style="color:var(--red);">Configure your LLM API key in Settings.</span>'; return; }
-  var ac=new AbortController();var to=setTimeout(function(){ac.abort();},60000);
+  var ac=new AbortController();var to=setTimeout(function(){ac.abort();},45000);
   fetch('/agents/chat', {
     method: 'POST',
     signal: ac.signal,
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('sr_backend_token') || localStorage.getItem('stratroom_token') || '') },
-    body: JSON.stringify({ agent: 'risk', message: 'Perform a deep analysis of the risk register. Identify compound risk chains (how risks feed into each other), estimate financial exposure, and provide board-level recommendations. Format with clear headers and sections.', provider: cfg.provider, api_key: cfg.apiKey, model: cfg.model, conversation_id: null, base_url: cfg.baseUrl })
+    body: JSON.stringify({ agent: 'risk', message: 'Perform a deep analysis of the risk register. Identify compound risk chains (how risks feed into each other), estimate financial exposure, and provide board-level recommendations. Format with clear headers and sections.', provider: cfg.provider, api_key: cfg.apiKey||'', model: cfg.model, conversation_id: null, base_url: cfg.baseUrl })
   }).then(function(r) { clearTimeout(to); return r.json(); }).then(function(data) {
-    if (data.error || data.detail) { out.innerHTML = '<span style="color:var(--red);">' + (data.error || data.detail || '').replace(/</g,'&lt;') + '</span>'; return; }
+    if (data.error || data.detail) { out.innerHTML = '<span style="color:var(--red);">' + String(data.error || data.detail || '').replace(/</g,'&lt;') + '</span>'; return; }
     out.innerHTML = '<div style="white-space:pre-wrap;font-size:12px;line-height:1.7;color:var(--text2)">' + (data.response || '').replace(/</g,'&lt;') + '</div>';
-  }).catch(function(e) { if(e.name!=='AbortError'){out.innerHTML = '<span style="color:var(--red);">Error: ' + (e.message || '').replace(/</g,'&lt;') + '</span>';}else{out.innerHTML='<span style="color:var(--red);">Request timed out. Check your LLM provider.</span>';} });
+  }).catch(function(e) { if(e.name!=='AbortError'&&!e.message?.includes('aborted')){out.innerHTML = '<span style="color:var(--red);">Error: ' + (e.message || '').replace(/</g,'&lt;') + '</span>';}else{out.innerHTML='<span style="color:var(--red);">Request timed out. Check your LLM provider.</span>';} });
 }
 function generateRiskTasks() {
   const el = document.getElementById('risk-tasks-content');
@@ -9705,16 +9738,16 @@ function generateRiskTasks() {
   el.innerHTML = '<div style="color:var(--text3);">⚡ Generating AI tasks for exec approval...</div>';
   var cfg = _getLLMConfig();
   if (!cfg.apiKey && cfg.provider !== 'ollama') { el.innerHTML = '<div style="color:var(--red);">Configure your LLM API key in Settings.</div>'; return; }
-  var ac=new AbortController();var to=setTimeout(function(){ac.abort();},60000);
+  var ac=new AbortController();var to=setTimeout(function(){ac.abort();},45000);
   fetch('/agents/chat', {
     method: 'POST',
     signal: ac.signal,
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('sr_backend_token') || localStorage.getItem('stratroom_token') || '') },
-    body: JSON.stringify({ agent: 'risk', message: 'Generate 2-3 prioritized action tasks from the current risk register. For each: task title, owner, deadline, priority. Format as actionable items.', provider: cfg.provider, api_key: cfg.apiKey, model: cfg.model, conversation_id: null, base_url: cfg.baseUrl })
+    body: JSON.stringify({ agent: 'risk', message: 'Generate 2-3 prioritized action tasks from the current risk register. For each: task title, owner, deadline, priority. Format as actionable items.', provider: cfg.provider, api_key: cfg.apiKey||'', model: cfg.model, conversation_id: null, base_url: cfg.baseUrl })
   }).then(function(r) { clearTimeout(to); return r.json(); }).then(function(data) {
-    if (data.error || data.detail) { el.innerHTML = '<div style="color:var(--red);">' + (data.error || data.detail || '').replace(/</g,'&lt;') + '</div>'; return; }
+    if (data.error || data.detail) { el.innerHTML = '<div style="color:var(--red);">' + String(data.error || data.detail || '').replace(/</g,'&lt;') + '</div>'; return; }
     el.innerHTML = '<div style="white-space:pre-wrap;font-size:12px;line-height:1.7;color:var(--text2)">' + (data.response || '').replace(/</g,'&lt;') + '</div>';
-  }).catch(function(e) { if(e.name!=='AbortError'){el.innerHTML = '<div style="color:var(--red);">Error: ' + (e.message || '').replace(/</g,'&lt;') + '</div>';}else{el.innerHTML='<div style="color:var(--red);">Request timed out. Check your LLM provider.</div>';} });
+  }).catch(function(e) { if(e.name!=='AbortError'&&!e.message?.includes('aborted')){el.innerHTML = '<div style="color:var(--red);">Error: ' + (e.message || '').replace(/</g,'&lt;') + '</div>';}else{el.innerHTML='<div style="color:var(--red);">Request timed out. Check your LLM provider.</div>';} });
 }
 // Expose to global scope for onclick handlers
 window.modChatQuickRisk = modChatQuickRisk;
@@ -9740,128 +9773,136 @@ window.generateRiskTasks = generateRiskTasks;
 </style>
 
 <script>
-(function(){
-  const riskData=[
-    {id:1,name:"Cyber Security Breach",owner:"Priya Sharma (CISO)",inhL:5,inhI:5,resL:3,resI:4,desc:"Legacy auth exposure",mit:"EDR + MFA rollout"},
-    {id:2,name:"APAC Supply Chain Failure",owner:"Carlos Mendez",inhL:5,inhI:4,resL:3,resI:3,desc:"Single supplier >60%",mit:"Dual-sourcing RFP"},
-    {id:3,name:"Digital Transformation Delay",owner:"Daniel Reyes",inhL:4,inhI:5,resL:3,resI:4,desc:"92% budget at 38%",mit:"Recovery plan pending"},
-    {id:4,name:"Talent Attrition (Engineering)",owner:"Linh Nguyen",inhL:4,inhI:3,resL:3,resI:2,desc:"Retention 58%",mit:"Retention program"},
-    {id:5,name:"Regulatory Fine (GDPR)",owner:"Rachel Kim",inhL:3,inhI:4,resL:2,resI:3,desc:"Data retention gap",mit:"Remediation"},
-    {id:6,name:"Market Volatility / FX",owner:"James Okafor",inhL:3,inhI:3,resL:2,resI:2,desc:"MEA currency exposure",mit:"Hedging"},
-    {id:7,name:"Cloud Infrastructure Outage",owner:"Aiko Tanaka",inhL:2,inhI:5,resL:1,resI:4,desc:"DR plan tested",mit:"Multi-AZ"},
-    {id:8,name:"Key Vendor Insolvency",owner:"Marcus Webb",inhL:2,inhI:4,resL:1,resI:3,desc:"Vendor monitoring",mit:"Alt sourcing"},
-    {id:9,name:"IP / Data Leak",owner:"Priya Sharma",inhL:3,inhI:5,resL:2,resI:3,desc:"DLP deployment Q4",mit:"DLP+encrypt"},
-    {id:10,name:"Office / Site Disruption",owner:"Marcus Webb",inhL:2,inhI:2,resL:1,resI:1,desc:"BCP updated",mit:"Remote ready"},
-    {id:11,name:"Competitor Product Launch",owner:"Sarah Mitchell",inhL:4,inhI:4,resL:3,resI:3,desc:"War room active",mit:"Diff strategy"},
-    {id:12,name:"Interest Rate Exposure",owner:"James Okafor",inhL:1,inhI:3,resL:1,resI:2,desc:"Fixed rates",mit:"Swaps"}
-  ];
-  riskData.forEach(r=>{r.inhHeat=r.inhL*r.inhI; r.resHeat=r.resL*r.resI;});
+let riskData = [];
+const el=id=>document.getElementById(id);
+function sc(h){return h>=20?'sev-critical':h>=15?'sev-high':h>=10?'sev-medium':'sev-low';}
+function sl(h){return h>=20?'Critical':h>=15?'High':h>=10?'Medium':'Low';}
 
-  const el=id=>document.getElementById(id);
-  function sc(h){return h>=20?'sev-critical':h>=15?'sev-high':h>=10?'sev-medium':'sev-low';}
-  function sl(h){return h>=20?'Critical':h>=15?'High':h>=10?'Medium':'Low';}
+function updateKPIs(){
+  const n=riskData.length || 1;
+  const avgInh=(riskData.reduce((s,r)=>s+r.inhHeat,0)/n).toFixed(1);
+  const avgRes=(riskData.reduce((s,r)=>s+r.resHeat,0)/n).toFixed(1);
+  if(el('kpi-critical'))    el('kpi-critical').innerText=riskData.filter(r=>r.resHeat>=20).length;
+  if(el('kpi-high'))        el('kpi-high').innerText=riskData.filter(r=>r.resHeat>=15&&r.resHeat<20).length;
+  if(el('kpi-avg-inherent'))el('kpi-avg-inherent').innerText=riskData.length?avgInh:'—';
+  if(el('kpi-avg-residual'))el('kpi-avg-residual').innerText=riskData.length?avgRes:'—';
+  if(el('kpi-resilience'))  el('kpi-resilience').innerText=riskData.length?Math.min(98,Math.max(40,Math.round(100-(avgRes/25)*40)))+'%':'—';
+}
 
-  function updateKPIs(){
-    const avgInh=(riskData.reduce((s,r)=>s+r.inhHeat,0)/12).toFixed(1);
-    const avgRes=(riskData.reduce((s,r)=>s+r.resHeat,0)/12).toFixed(1);
-    if(el('kpi-critical'))    el('kpi-critical').innerText=riskData.filter(r=>r.resHeat>=20).length;
-    if(el('kpi-high'))        el('kpi-high').innerText=riskData.filter(r=>r.resHeat>=15&&r.resHeat<20).length;
-    if(el('kpi-avg-inherent'))el('kpi-avg-inherent').innerText=avgInh;
-    if(el('kpi-avg-residual'))el('kpi-avg-residual').innerText=avgRes;
-    if(el('kpi-resilience'))  el('kpi-resilience').innerText=Math.min(98,Math.max(40,Math.round(100-(avgRes/25)*40)))+'%';
-  }
+function renderRiskTable(){
+  const tbody=el('risk-table-body'); if(!tbody) return;
+  if(!riskData.length){ tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text3);">No risks found.</td></tr>'; return; }
+  tbody.innerHTML=riskData.map(r=>`<tr style="border-bottom:1px solid var(--border);">
+    <td style="padding:10px 12px;color:var(--text2);"><strong>${r.name}</strong><div style="font-size:10px;color:var(--text3);">${r.desc}</div></td>
+    <td style="padding:10px 12px;color:var(--text2);">${r.owner}</td>
+    <td style="padding:10px 12px;color:var(--text2);">${r.inhL}/${r.inhI}</td>
+    <td style="padding:10px 12px;color:var(--text2);">${r.resL}/${r.resI}</td>
+    <td style="padding:10px 12px;"><span class="sev-badge ${sc(r.inhHeat)}">${r.inhHeat}</span></td>
+    <td style="padding:10px 12px;"><span class="sev-badge ${sc(r.resHeat)}">${r.resHeat}</span></td>
+    <td style="padding:10px 12px;"><span class="sev-badge ${sc(r.resHeat)}">${sl(r.resHeat)}</span> <span style="cursor:help;" title="${r.mit}">🛡️</span></td>
+  </tr>`).join('');
+}
 
-  function renderRiskTable(){
-    const tbody=el('risk-table-body'); if(!tbody) return;
-    tbody.innerHTML=riskData.map(r=>`<tr style="border-bottom:1px solid var(--border);">
-      <td style="padding:10px 12px;color:var(--text2);"><strong>${r.name}</strong><div style="font-size:10px;color:var(--text3);">${r.desc}</div></td>
-      <td style="padding:10px 12px;color:var(--text2);">${r.owner}</td>
-      <td style="padding:10px 12px;color:var(--text2);">${r.inhL}/${r.inhI}</td>
-      <td style="padding:10px 12px;color:var(--text2);">${r.resL}/${r.resI}</td>
-      <td style="padding:10px 12px;"><span class="sev-badge ${sc(r.inhHeat)}">${r.inhHeat}</span></td>
-      <td style="padding:10px 12px;"><span class="sev-badge ${sc(r.resHeat)}">${r.resHeat}</span></td>
-      <td style="padding:10px 12px;"><span class="sev-badge ${sc(r.resHeat)}">${sl(r.resHeat)}</span> <span style="cursor:help;" title="${r.mit}">🛡️</span></td>
-    </tr>`).join('');
-  }
+function buildGrid(mode){
+  const grid=Array(5).fill().map(()=>Array(5).fill().map(()=>[]));
+  riskData.forEach(r=>{
+    const l=mode==='inherent'?r.inhL:r.resL, i=mode==='inherent'?r.inhI:r.resI, h=mode==='inherent'?r.inhHeat:r.resHeat;
+    if(l>=1&&l<=5&&i>=1&&i<=5) grid[l-1][i-1].push({name:r.name,heat:h});
+  });
+  return grid;
+}
 
-  function buildGrid(mode){
-    const grid=Array(5).fill().map(()=>Array(5).fill().map(()=>[]));
-    riskData.forEach(r=>{
-      const l=mode==='inherent'?r.inhL:r.resL, i=mode==='inherent'?r.inhI:r.resI, h=mode==='inherent'?r.inhHeat:r.resHeat;
-      if(l>=1&&l<=5&&i>=1&&i<=5) grid[l-1][i-1].push({name:r.name,heat:h});
-    });
-    return grid;
-  }
-
-  function renderHeatmap(mode){
-    const container=el('heatmap-container'); if(!container) return;
-    const grid=buildGrid(mode);
-    const lhLabels=['5 — Very High','4 — High','3 — Medium','2 — Low','1 — Very Low'];
-    const impLabels=[['1','Very Low'],['2','Low'],['3','Medium'],['4','High'],['5','Very High']];
-    const bgOf=h=>h>=20?'rgba(239,68,68,0.22)':h>=15?'rgba(245,158,11,0.18)':h>=10?'rgba(56,189,248,0.12)':'rgba(34,197,94,0.1)';
-    const bdOf=h=>h>=20?'var(--red-border)':h>=15?'var(--amber-border)':h>=10?'var(--blue-border)':'var(--green-border)';
-    const clOf=h=>h>=20?'var(--red)':h>=15?'var(--amber)':h>=10?'var(--blue2)':'var(--green)';
-
-    let html=`<div style="display:flex;"><div style="width:18px;display:flex;align-items:center;justify-content:center;"><div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:9px;font-weight:700;color:var(--text3);">LIKELIHOOD →</div></div><div style="flex:1;">`;
-    html+=`<div style="display:grid;grid-template-columns:72px repeat(5,1fr);gap:4px;margin-bottom:4px;"><div></div>${impLabels.map(([n,l])=>`<div style="text-align:center;"><div style="font-size:11px;font-weight:800;">${n}</div><div style="font-size:8px;color:var(--text3);">${l}</div></div>`).join('')}</div>`;
-    html+=`<div style="display:grid;grid-template-columns:72px 1fr;margin-bottom:2px;"><div></div><div style="text-align:center;font-size:9px;font-weight:700;color:var(--text3);">← IMPACT →</div></div>`;
-    for(let row=0;row<5;row++){
-      const lval=5-row;
-      html+=`<div style="display:grid;grid-template-columns:72px repeat(5,1fr);gap:4px;margin-bottom:4px;">`;
-      const lp=lhLabels[row].split(' — ');
-      html+=`<div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:center;padding-right:6px;"><div style="font-size:11px;font-weight:800;">${lp[0]}</div><div style="font-size:8px;color:var(--text3);">${lp[1]||''}</div></div>`;
-      for(let col=0;col<5;col++){
-        const hs=lval*(col+1), risks=grid[lval-1][col], cnt=risks.length;
-        html+=`<div style="background:${bgOf(hs)};border:1px solid ${bdOf(hs)};color:${clOf(hs)};border-radius:8px;text-align:center;padding:12px 4px;font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;" title="${cnt>0?risks.map(r=>r.name+'('+r.heat+')').join(', '):'No risks'}" onmouseenter="this.style.transform='scale(1.04)'" onmouseleave="this.style.transform='scale(1)'">
-          ${cnt>0?`<div style="font-size:16px;font-weight:800;">${cnt}</div><div style="font-size:8px;">${risks.slice(0,2).map(r=>r.name.split(' ')[0]).join(',')}${cnt>2?'+${cnt-2}':''}</div>`:'<div style="opacity:.4;">—</div>'}
-        </div>`;
-      }
-      html+=`</div>`;
+function renderHeatmap(mode){
+  const container=el('heatmap-container'); if(!container) return;
+  if(!riskData.length){ container.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">No risk data to display.</div>'; return; }
+  const grid=buildGrid(mode);
+  const lhLabels=['5 — Very High','4 — High','3 — Medium','2 — Low','1 — Very Low'];
+  const impLabels=[['1','Very Low'],['2','Low'],['3','Medium'],['4','High'],['5','Very High']];
+  const bgOf=h=>h>=20?'rgba(239,68,68,0.22)':h>=15?'rgba(245,158,11,0.18)':h>=10?'rgba(56,189,248,0.12)':'rgba(34,197,94,0.1)';
+  const bdOf=h=>h>=20?'var(--red-border)':h>=15?'var(--amber-border)':h>=10?'var(--blue-border)':'var(--green-border)';
+  const clOf=h=>h>=20?'var(--red)':h>=15?'var(--amber)':h>=10?'var(--blue2)':'var(--green)';
+  let html=`<div style="display:flex;"><div style="width:18px;display:flex;align-items:center;justify-content:center;"><div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:9px;font-weight:700;color:var(--text3);">LIKELIHOOD →</div></div><div style="flex:1;">`;
+  html+=`<div style="display:grid;grid-template-columns:72px repeat(5,1fr);gap:4px;margin-bottom:4px;"><div></div>${impLabels.map(([n,l])=>`<div style="text-align:center;"><div style="font-size:11px;font-weight:800;">${n}</div><div style="font-size:8px;color:var(--text3);">${l}</div></div>`).join('')}</div>`;
+  html+=`<div style="display:grid;grid-template-columns:72px 1fr;margin-bottom:2px;"><div></div><div style="text-align:center;font-size:9px;font-weight:700;color:var(--text3);">← IMPACT →</div></div>`;
+  for(let row=0;row<5;row++){
+    const lval=5-row;
+    html+=`<div style="display:grid;grid-template-columns:72px repeat(5,1fr);gap:4px;margin-bottom:4px;">`;
+    const lp=lhLabels[row].split(' — ');
+    html+=`<div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:center;padding-right:6px;"><div style="font-size:11px;font-weight:800;">${lp[0]}</div><div style="font-size:8px;color:var(--text3);">${lp[1]||''}</div></div>`;
+    for(let col=0;col<5;col++){
+      const hs=lval*(col+1), risks=grid[lval-1][col], cnt=risks.length;
+      html+=`<div style="background:${bgOf(hs)};border:1px solid ${bdOf(hs)};color:${clOf(hs)};border-radius:8px;text-align:center;padding:12px 4px;font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;" title="${cnt>0?risks.map(r=>r.name+'('+r.heat+')').join(', '):'No risks'}" onmouseenter="this.style.transform='scale(1.04)'" onmouseleave="this.style.transform='scale(1)'">
+        ${cnt>0?`<div style="font-size:16px;font-weight:800;">${cnt}</div><div style="font-size:8px;">${risks.slice(0,2).map(r=>r.name.split(' ')[0]).join(',')}${cnt>2?'+${cnt-2}':''}</div>`:'<div style="opacity:.4;">—</div>'}
+      </div>`;
     }
-    html+=`</div></div>`;
-    container.innerHTML=html;
-    const badge=el('heatmap-badge');
-    if(badge) badge.innerHTML=mode==='inherent'?'🔥 Inherent: raw likelihood × impact':'✅ Residual: after existing controls';
+    html+=`</div>`;
   }
+  html+=`</div></div>`;
+  container.innerHTML=html;
+  const badge=el('heatmap-badge');
+  if(badge) badge.innerHTML=mode==='inherent'?'🔥 Inherent: raw likelihood × impact':'✅ Residual: after existing controls';
+}
 
-  function renderAI(){
-    const s=el('risk-ai-signals'), r=el('risk-ai-recs');
-    if(s) s.innerHTML=`<div style="display:flex;gap:8px;margin-bottom:8px;"><div style="width:6px;height:6px;background:var(--red);border-radius:50%;margin-top:5px;flex-shrink:0;"></div><div><strong>Cyber residual 12</strong> (inherent 25) — controls reduced but legacy DT still elevates.</div></div><div style="display:flex;gap:8px;"><div style="width:6px;height:6px;background:var(--amber);border-radius:50%;margin-top:5px;flex-shrink:0;"></div><div><strong>Supply Chain residual 9</strong> (inherent 20) — dual sourcing helping.</div></div>`;
-    if(r) r.innerHTML=`<div style="background:var(--red-dim);padding:8px 10px;border-radius:8px;margin-bottom:6px;"><strong>🔴 CRITICAL</strong> — Complete DT recovery plan to reduce residual 12→6.</div><div style="background:var(--amber-dim);padding:8px 10px;border-radius:8px;"><strong>🟠 HIGH</strong> — Expand vendor diversification to push residual 9→4.</div>`;
-  }
+function renderAI(){
+  const s=el('risk-ai-signals'), r=el('risk-ai-recs');
+  if(s) s.innerHTML=riskData.length?'<div style="color:var(--text3);font-size:11px;">AI signals available after deeper analysis. Use the AI chat for insights.</div>':'<div style="color:var(--text3);font-size:11px;">No risk data for AI analysis.</div>';
+  if(r) r.innerHTML='<div style="color:var(--text3);font-size:11px;">Use the AI Agent panel to generate recommendations.</div>';
+}
 
-  function initToggles(){
-    let currentMode='inherent';
-    document.querySelectorAll('.view-toggle-risk').forEach(btn=>{
-      btn.addEventListener('click',function(){
-        document.querySelectorAll('.view-toggle-risk').forEach(b=>{b.style.background='transparent';b.style.color='var(--text3)';b.classList.remove('active');});
-        this.style.background='var(--blue2)'; this.style.color='#fff'; this.classList.add('active');
-        const view=this.getAttribute('data-view');
-        if(view==='table'){
-          el('risk-tableView').style.display='block';
-          el('risk-heatmapView').style.display='none';
-        } else {
-          el('risk-tableView').style.display='none';
-          el('risk-heatmapView').style.display='block';
-          currentMode=view; renderHeatmap(currentMode);
-        }
-      });
+function initToggles(){
+  let currentMode='inherent';
+  document.querySelectorAll('.view-toggle-risk').forEach(btn=>{
+    btn.addEventListener('click',function(){
+      document.querySelectorAll('.view-toggle-risk').forEach(b=>{b.style.background='transparent';b.style.color='var(--text3)';b.classList.remove('active');});
+      this.style.background='var(--blue2)'; this.style.color='#fff'; this.classList.add('active');
+      const view=this.getAttribute('data-view');
+      if(view==='table'){
+        el('risk-tableView').style.display='block';
+        el('risk-heatmapView').style.display='none';
+      } else {
+        el('risk-tableView').style.display='none';
+        el('risk-heatmapView').style.display='block';
+        currentMode=view; renderHeatmap(currentMode);
+      }
     });
-  }
+  });
+}
 
-  window._riskHydrated = false;
-  function initRiskPage(){
-    if (window._riskHydrated) return;
-    updateKPIs();
-    renderRiskTable();
-    renderHeatmap('inherent');
-    renderAI();
-    initToggles();
-  }
+window._riskHydrated = false;
+async function initRiskPage(){
+  if (window._riskHydrated) return;
+  window._riskHydrated = true;
+  if (typeof window.isTokenValid !== 'function' || !window.isTokenValid()) { updateKPIs(); renderRiskTable(); renderHeatmap('inherent'); renderAI(); initToggles(); return; }
+  try {
+    const resp = await (window.authFetch || fetch)((window.BACKEND || '') + '/risks', { cache: 'no-store' });
+    if (resp.ok) {
+      const data = await resp.json();
+      const rows = data.risks || data;
+      if (Array.isArray(rows) && rows.length > 0) {
+        riskData = rows.map(r => ({
+          id: r.id || r.ID,
+          name: r.riskName || r.name || r.risk_name || 'Unknown',
+          owner: r.owner || '—',
+          inhL: parseInt(r.inherentLikelihood || r.inhL || r.inherent_likelihood || 1),
+          inhI: parseInt(r.inherentImpact || r.inhI || r.inherent_impact || 1),
+          resL: parseInt(r.residualLikelihood || r.resL || r.residual_likelihood || 1),
+          resI: parseInt(r.residualImpact || r.resI || r.residual_impact || 1),
+          desc: r.description || r.desc || '',
+          mit: r.mitigation || r.mit || ''
+        }));
+        riskData.forEach(r => { r.inhHeat = r.inhL * r.inhI; r.resHeat = r.resL * r.resI; });
+      }
+    }
+  } catch(e) { console.warn('Risk fetch failed, showing empty state', e); }
+  updateKPIs();
+  renderRiskTable();
+  renderHeatmap('inherent');
+  renderAI();
+  initToggles();
+}
 
-  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',initRiskPage);}
-  else{setTimeout(initRiskPage,100);}
-})();
+if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',initRiskPage);}
+else{setTimeout(initRiskPage,100);}
 </script>
 
 <!-- SCORECARD PANEL -->
@@ -9881,186 +9922,93 @@ window.generateRiskTasks = generateRiskTasks;
 
   <!-- Scorecard Grid Container -->
   <div id="scorecardGrid" class="scorecard-grid">
-    <!-- Financial -->
-    <div class="sc-perspective-card" style="--card-accent:var(--green)">
-      <div style="height:4px;background:var(--green);border-radius:var(--radius-card) var(--radius-card) 0 0"></div>
-      <div style="padding:16px 18px 14px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <div style="display:flex;align-items:center;gap:9px">
-            <div style="width:36px;height:36px;border-radius:10px;background:var(--green-dim);border:1px solid var(--green-border);display:flex;align-items:center;justify-content:center;font-size:18px">💰</div>
-            <div>
-              <div style="font-size:12px;font-weight:700;color:var(--text)">Financial</div>
-              <div style="font-size:9px;color:var(--text3);font-family:'DM Mono',monospace">PERSPECTIVE 1</div>
-            </div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:26px;font-weight:800;color:var(--green);line-height:1">82%</div>
-            <div style="font-size:9px;color:var(--green)">↑ On Track</div>
-          </div>
-        </div>
-        <div style="height:6px;background:var(--surface);border-radius:99px;overflow:hidden;margin-bottom:12px"><div style="height:100%;width:82%;background:var(--green);border-radius:99px;transition:width 1s ease-out"></div></div>
-        <div style="display:flex;flex-direction:column;gap:5px;font-size:11px">
-          <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2)">Revenue Growth</span><span style="color:var(--green);font-weight:600">82% ↑</span></div>
-          <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2)">Cost Efficiency</span><span style="color:var(--green);font-weight:600">91% ↑</span></div>
-          <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="color:var(--text2)">EBITDA Margin</span><span style="color:var(--amber);font-weight:600">74% →</span></div>
-        </div>
-        <div style="margin-top:10px;display:flex;gap:5px;flex-wrap:wrap">
-          <span style="font-size:9px;padding:2px 8px;background:var(--green-dim);color:var(--green);border-radius:99px;border:1px solid var(--green-border)">Revenue Growth</span>
-          <span style="font-size:9px;padding:2px 8px;background:var(--surface);color:var(--text3);border-radius:99px;border:1px solid var(--border)">Cost Efficiency</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Customer -->
-    <div class="sc-perspective-card" style="--card-accent:var(--blue2)">
-      <div style="height:4px;background:var(--blue2);border-radius:var(--radius-card) var(--radius-card) 0 0"></div>
-      <div style="padding:16px 18px 14px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <div style="display:flex;align-items:center;gap:9px">
-            <div style="width:36px;height:36px;border-radius:10px;background:var(--blue-dim);border:1px solid var(--blue-border);display:flex;align-items:center;justify-content:center;font-size:18px">👥</div>
-            <div>
-              <div style="font-size:12px;font-weight:700;color:var(--text)">Customer</div>
-              <div style="font-size:9px;color:var(--text3);font-family:'DM Mono',monospace">PERSPECTIVE 2</div>
-            </div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:26px;font-weight:800;color:var(--blue2);line-height:1">74%</div>
-            <div style="font-size:9px;color:var(--blue2)">→ At Risk</div>
-          </div>
-        </div>
-        <div style="height:6px;background:var(--surface);border-radius:99px;overflow:hidden;margin-bottom:12px"><div style="height:100%;width:74%;background:var(--blue2);border-radius:99px;transition:width 1s ease-out"></div></div>
-        <div style="display:flex;flex-direction:column;gap:5px;font-size:11px">
-          <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2)">Customer Experience</span><span style="color:var(--blue2);font-weight:600">74% →</span></div>
-          <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2)">NPS Score</span><span style="color:var(--green);font-weight:600">+42 ↑</span></div>
-          <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="color:var(--text2)">Market Share</span><span style="color:var(--amber);font-weight:600">67% ↓</span></div>
-        </div>
-        <div style="margin-top:10px;display:flex;gap:5px;flex-wrap:wrap">
-          <span style="font-size:9px;padding:2px 8px;background:var(--blue-dim);color:var(--blue2);border-radius:99px;border:1px solid var(--blue-border)">MEA Expansion</span>
-          <span style="font-size:9px;padding:2px 8px;background:var(--surface);color:var(--text3);border-radius:99px;border:1px solid var(--border)">NPS Initiative</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Internal Processes -->
-    <div class="sc-perspective-card" style="--card-accent:var(--amber)">
-      <div style="height:4px;background:var(--amber);border-radius:var(--radius-card) var(--radius-card) 0 0"></div>
-      <div style="padding:16px 18px 14px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <div style="display:flex;align-items:center;gap:9px">
-            <div style="width:36px;height:36px;border-radius:10px;background:var(--amber-dim);border:1px solid var(--amber-border);display:flex;align-items:center;justify-content:center;font-size:18px">⚙️</div>
-            <div>
-              <div style="font-size:12px;font-weight:700;color:var(--text)">Internal Processes</div>
-              <div style="font-size:9px;color:var(--text3);font-family:'DM Mono',monospace">PERSPECTIVE 3</div>
-            </div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:26px;font-weight:800;color:var(--amber);line-height:1">63%</div>
-            <div style="font-size:9px;color:var(--amber)">↓ Lagging</div>
-          </div>
-        </div>
-        <div style="height:6px;background:var(--surface);border-radius:99px;overflow:hidden;margin-bottom:12px"><div style="height:100%;width:63%;background:var(--amber);border-radius:99px;transition:width 1s ease-out"></div></div>
-        <div style="display:flex;flex-direction:column;gap:5px;font-size:11px">
-          <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2)">Digital Transformation</span><span style="color:var(--amber);font-weight:600">63% ↓</span></div>
-          <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2)">Cloud Migration</span><span style="color:var(--blue2);font-weight:600">67% →</span></div>
-          <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="color:var(--text2)">Process Efficiency</span><span style="color:var(--amber);font-weight:600">71% ↓</span></div>
-        </div>
-        <div style="margin-top:10px;display:flex;gap:5px;flex-wrap:wrap">
-          <span style="font-size:9px;padding:2px 8px;background:var(--amber-dim);color:var(--amber);border-radius:99px;border:1px solid var(--amber-border)">DT Sprint 15</span>
-          <span style="font-size:9px;padding:2px 8px;background:var(--surface);color:var(--text3);border-radius:99px;border:1px solid var(--border)">Cloud Migration</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Learning & Growth -->
-    <div class="sc-perspective-card" style="--card-accent:var(--red)">
-      <div style="height:4px;background:var(--red);border-radius:var(--radius-card) var(--radius-card) 0 0"></div>
-      <div style="padding:16px 18px 14px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <div style="display:flex;align-items:center;gap:9px">
-            <div style="width:36px;height:36px;border-radius:10px;background:var(--red-dim);border:1px solid var(--red-border);display:flex;align-items:center;justify-content:center;font-size:18px">📚</div>
-            <div>
-              <div style="font-size:12px;font-weight:700;color:var(--text)">Learning &amp; Growth</div>
-              <div style="font-size:9px;color:var(--text3);font-family:'DM Mono',monospace">PERSPECTIVE 4</div>
-            </div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:26px;font-weight:800;color:var(--red);line-height:1">58%</div>
-            <div style="font-size:9px;color:var(--red)">↓ Critical</div>
-          </div>
-        </div>
-        <div style="height:6px;background:var(--surface);border-radius:99px;overflow:hidden;margin-bottom:12px"><div style="height:100%;width:58%;background:var(--red);border-radius:99px;transition:width 1s ease-out"></div></div>
-        <div style="display:flex;flex-direction:column;gap:5px;font-size:11px">
-          <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2)">Talent Retention</span><span style="color:var(--red);font-weight:600">58% ↓</span></div>
-          <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2)">Employee Engagement</span><span style="color:var(--amber);font-weight:600">71% →</span></div>
-          <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="color:var(--text2)">Innovation Pipeline</span><span style="color:var(--blue2);font-weight:600">69% →</span></div>
-        </div>
-        <div style="margin-top:10px;display:flex;gap:5px;flex-wrap:wrap">
-          <span style="font-size:9px;padding:2px 8px;background:var(--red-dim);color:var(--red);border-radius:99px;border:1px solid var(--red-border)">⚠ Critical</span>
-          <span style="font-size:9px;padding:2px 8px;background:var(--surface);color:var(--text3);border-radius:99px;border:1px solid var(--border)">Talent Programme</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- ESG -->
-    <div class="sc-perspective-card" style="--card-accent:var(--green)">
-      <div style="height:4px;background:var(--green);border-radius:var(--radius-card) var(--radius-card) 0 0"></div>
-      <div style="padding:16px 18px 14px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <div style="display:flex;align-items:center;gap:9px">
-            <div style="width:36px;height:36px;border-radius:10px;background:var(--green-dim);border:1px solid var(--green-border);display:flex;align-items:center;justify-content:center;font-size:18px">🌿</div>
-            <div>
-              <div style="font-size:12px;font-weight:700;color:var(--text)">ESG &amp; Compliance</div>
-              <div style="font-size:9px;color:var(--text3);font-family:'DM Mono',monospace">PERSPECTIVE 5</div>
-            </div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:26px;font-weight:800;color:var(--green);line-height:1">91%</div>
-            <div style="font-size:9px;color:var(--green)">↑ Leading</div>
-          </div>
-        </div>
-        <div style="height:6px;background:var(--surface);border-radius:99px;overflow:hidden;margin-bottom:12px"><div style="height:100%;width:91%;background:var(--green);border-radius:99px;transition:width 1s ease-out"></div></div>
-        <div style="display:flex;flex-direction:column;gap:5px;font-size:11px">
-          <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2)">ESG Targets</span><span style="color:var(--green);font-weight:600">91% ↑</span></div>
-          <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2)">Carbon Reduction</span><span style="color:var(--green);font-weight:600">88% ↑</span></div>
-          <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="color:var(--text2)">Reg. Compliance</span><span style="color:var(--green);font-weight:600">96% ↑</span></div>
-        </div>
-        <div style="margin-top:10px;display:flex;gap:5px;flex-wrap:wrap">
-          <span style="font-size:9px;padding:2px 8px;background:var(--green-dim);color:var(--green);border-radius:99px;border:1px solid var(--green-border)">Net Zero 2030</span>
-          <span style="font-size:9px;padding:2px 8px;background:var(--surface);color:var(--text3);border-radius:99px;border:1px solid var(--border)">SOC2 Active</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Risk -->
-    <div class="sc-perspective-card" style="--card-accent:var(--orange)">
-      <div style="height:4px;background:var(--orange);border-radius:var(--radius-card) var(--radius-card) 0 0"></div>
-      <div style="padding:16px 18px 14px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <div style="display:flex;align-items:center;gap:9px">
-            <div style="width:36px;height:36px;border-radius:10px;background:var(--orange-dim);border:1px solid var(--orange-border);display:flex;align-items:center;justify-content:center;font-size:18px">⚠️</div>
-            <div>
-              <div style="font-size:12px;font-weight:700;color:var(--text)">Risk &amp; Security</div>
-              <div style="font-size:9px;color:var(--text3);font-family:'DM Mono',monospace">PERSPECTIVE 6</div>
-            </div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:26px;font-weight:800;color:var(--orange);line-height:1">78%</div>
-            <div style="font-size:9px;color:var(--amber)">↓ At Risk</div>
-          </div>
-        </div>
-        <div style="height:6px;background:var(--surface);border-radius:99px;overflow:hidden;margin-bottom:12px"><div style="height:100%;width:78%;background:var(--orange);border-radius:99px;transition:width 1s ease-out"></div></div>
-        <div style="display:flex;flex-direction:column;gap:5px;font-size:11px">
-          <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2)">Cybersecurity Posture</span><span style="color:var(--amber);font-weight:600">78% ↓</span></div>
-          <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2)">Risk Heat Score</span><span style="color:var(--red);font-weight:600">12 ↑</span></div>
-          <div style="display:flex;justify-content:space-between;padding:5px 0"><span style="color:var(--text2)">Supply Chain</span><span style="color:var(--green);font-weight:600">81% ↑</span></div>
-        </div>
-        <div style="margin-top:10px;display:flex;gap:5px;flex-wrap:wrap">
-          <span style="font-size:9px;padding:2px 8px;background:var(--orange-dim);color:var(--orange);border-radius:99px;border:1px solid var(--orange-border)">Cyber Elevated</span>
-          <span style="font-size:9px;padding:2px 8px;background:var(--surface);color:var(--text3);border-radius:99px;border:1px solid var(--border)">APAC Vendor</span>
-        </div>
-      </div>
-    </div>
+    <div id="scorecard-loading" style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text3);">Loading scorecard data...</div>
   </div>
+  <script>
+  (function(){
+    const icons = { 'Financial':'💰','Customer':'👥','Internal Processes':'⚙️','Learning & Growth':'📚','ESG':'🌿','Risk':'⚠️','Default':'📊' };
+    const accentColors = { 'Financial':'var(--green)','Customer':'var(--blue2)','Internal Processes':'var(--amber)','Learning & Growth':'var(--red)','ESG':'var(--green)','Risk':'var(--orange)','Default':'var(--blue2)' };
+    const dimColors = { 'Financial':'var(--green-dim)','Customer':'var(--blue-dim)','Internal Processes':'var(--amber-dim)','Learning & Growth':'var(--red-dim)','ESG':'var(--green-dim)','Risk':'var(--orange-dim)','Default':'var(--blue-dim)' };
+    const borderColors = { 'Financial':'var(--green-border)','Customer':'var(--blue-border)','Internal Processes':'var(--amber-border)','Learning & Growth':'var(--red-border)','ESG':'var(--green-border)','Risk':'var(--orange-border)','Default':'var(--blue-border)' };
+    const nameMap = { 'Customer Stakeholder':'Customer','Internal Process':'Internal Processes','Learning Growth':'Learning & Growth','Learning_Growth':'Learning & Growth','Learning _Growth':'Learning & Growth','Transformation And Innovation':'Internal Processes','Transformation & Innovation':'Internal Processes','People And Organisational Capability':'Learning & Growth','People and Organisational Capability':'Learning & Growth','Governance Risk And Compliance':'Risk','Governance Risk and Compliance':'Risk','Governance And Strategy':'Risk','Governance and Strategy':'Risk','Capacity Expansion And Capital Projects':'Financial','Capacity Expansion and Capital Projects':'Financial','Financial Performance And Growth':'Financial','Financial Performance and Growth':'Financial','Financial Sustainability':'Financial','Manufacturing And Operational Excellence':'Internal Processes','Manufacturing and Operational Excellence':'Internal Processes','Customer And Market':'Customer','Customer and Market':'Customer','Customer Experience':'Customer','Efficiency':'Internal Processes','NA':'General' };
+    function pct(a,t){ var aa=parseFloat(a)||0, tt=parseFloat(t)||0; return tt>0?Math.min(100,Math.round(aa/tt*100)):Math.min(100,aa); }
+    function itemColor(s) { var ls=(s||'').toLowerCase(); return ls==='on-track'||ls==='on track'?'var(--green)':ls==='at-risk'||ls==='at risk'?'var(--amber)':ls==='critical'?'var(--red)':'var(--text3)'; }
+    function itemArrow(s) { var ls=(s||'').toLowerCase(); return ls==='on-track'||ls==='on track'?'↑':ls==='at-risk'||ls==='at risk'?'→':ls==='critical'?'↓':'◆'; }
+    function scoreColor(sc) { return sc>=75?'var(--green)':sc>=50?'var(--amber)':'var(--red)'; }
+    function scoreLabel(sc) { return sc>=75?'↑ On Track':sc>=50?'→ At Risk':'↓ Critical'; }
+
+    async function loadScorecards() {
+      const grid = document.getElementById('scorecardGrid');
+      if (typeof window.isTokenValid === 'function' && !window.isTokenValid()) return;
+      try {
+        const resp = await (window.authFetch || fetch)((window.BACKEND || '') + '/scorecards', { cache: 'no-store' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        var rows = data.scorecards || data;
+        if (!Array.isArray(rows) || rows.length === 0) throw new Error('No data');
+        const groups = {};
+        rows.forEach(function(r) {
+          var p = r.perspective || 'General';
+          if (!groups[p]) groups[p] = [];
+          groups[p].push(r);
+        });
+        var order = ['Financial','Customer','Internal Processes','Learning & Growth','ESG & Compliance','Risk & Security','General'];
+        var html = '';
+        order.forEach(function(p) {
+          if (!groups[p]) return;
+          var items = groups[p];
+          var sumScore = items.reduce(function(s,k){ return s + pct(k.actual, k.target); }, 0);
+          var avgScore = items.length ? Math.round(sumScore / items.length) : 0;
+          var c = scoreColor(avgScore);
+          var lbl = scoreLabel(avgScore);
+          var icon = icons[p] || icons.Default;
+          var accent = accentColors[p] || accentColors.Default;
+          var dim = dimColors[p] || dimColors.Default;
+          var border = borderColors[p] || borderColors.Default;
+          var kpis = items.slice(0,4).map(function(k) {
+            var sc = pct(k.actual, k.target);
+            var st = (k.status||'').toLowerCase();
+            var ar = itemArrow(st);
+            var cl = itemColor(st);
+            var nm = k.kpi_name || 'KPI';
+            return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%">'+nm+'</span><span style="color:'+cl+';font-weight:600;font-size:11px">'+sc+'% '+ar+'</span></div>';
+          }).join('');
+          var pills = items.slice(0,4).map(function(k) {
+            var nm = (k.kpi_name || 'KPI').replace(/Scorecard/g,'').trim() || 'KPI';
+            return '<span style="font-size:8px;padding:2px 8px;background:'+dim+';color:'+itemColor(k.status)+';border-radius:99px;border:1px solid '+border+'">'+nm+'</span>';
+          }).join('');
+          html += '<div class="sc-perspective-card" style="--card-accent:'+accent+'">'+
+            '<div style="height:4px;background:'+accent+';border-radius:var(--radius-card) var(--radius-card) 0 0"></div>'+
+            '<div style="padding:16px 18px 14px">'+
+              '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'+
+                '<div style="display:flex;align-items:center;gap:9px">'+
+                  '<div style="width:36px;height:36px;border-radius:10px;background:'+dim+';border:1px solid '+border+';display:flex;align-items:center;justify-content:center;font-size:18px">'+icon+'</div>'+
+                  '<div>'+
+                    '<div style="font-size:12px;font-weight:700;color:var(--text)">'+p+'</div>'+
+                    '<div style="font-size:9px;color:var(--text3);font-family:\'DM Mono\',monospace">'+items.length+' Scorecards</div>'+
+                  '</div>'+
+                '</div>'+
+                '<div style="text-align:right">'+
+                  '<div style="font-size:26px;font-weight:800;color:'+c+';line-height:1">'+avgScore+'%</div>'+
+                  '<div style="font-size:9px;color:'+c+'">'+lbl+'</div>'+
+                '</div>'+
+              '</div>'+
+              '<div style="height:6px;background:var(--surface);border-radius:99px;overflow:hidden;margin-bottom:12px"><div style="height:100%;width:'+Math.min(avgScore,100)+'%;background:'+c+';border-radius:99px;transition:width 1s ease-out"></div></div>'+
+              '<div style="display:flex;flex-direction:column;gap:3px;font-size:11px">'+kpis+'</div>'+
+              '<div style="margin-top:10px;display:flex;gap:5px;flex-wrap:wrap">'+pills+'</div>'+
+            '</div></div>';
+        });
+        if (!html) throw new Error('No perspectives');
+        grid.innerHTML = html;
+      } catch(e) {
+        console.warn('Scorecard load failed, showing empty state', e);
+        if (grid) grid.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text3);grid-column:1/-1;"><div style="font-size:48px;margin-bottom:12px;">📊</div><div style="font-size:16px;font-weight:600;margin-bottom:6px;">No Scorecard Data</div><div style="font-size:12px;">Connect the backend API to populate scorecard perspectives with live data.</div></div>';
+      }
+    }
+    if (typeof window.isTokenValid === 'function' && window.isTokenValid()) { loadScorecards(); }
+    else if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', function() { if (typeof window.isTokenValid === 'function' && window.isTokenValid()) loadScorecards(); }); }
+  })();
+  </script>
 
   <!-- Strategy Map Section (Hidden by default) -->
   <div id="strategy-map-section" style="display:none;background:var(--bg2);border-radius:20px;border:1px solid var(--border);margin-top:24px;overflow:hidden">
@@ -10144,6 +10092,17 @@ window.generateRiskTasks = generateRiskTasks;
       </div>
       <div id="scorecard-tasks-out" class="ai-output-area" style="display:none;"></div>
       <button class="btn btn-primary" style="font-size:11px;width:100%;margin-top:8px" onclick="generateModuleTasks('scorecard',this)">⚡ Generate AI Tasks for Exec Approval</button>
+    </div>
+  </div>
+
+  <!-- KPI Detail Table -->
+  <div style="margin-top:24px">
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px">📋 KPI Detail</div>
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+      <table id="kpi-table" style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr><th style="text-align:left;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">KPI</th><th style="text-align:left;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">Target</th><th style="text-align:left;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">Actual</th><th style="text-align:left;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">Status</th></tr></thead>
+        <tbody><tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text3)">Loading KPI details...</td></tr></tbody>
+      </table>
     </div>
   </div>
 
@@ -10312,99 +10271,273 @@ window.generateRiskTasks = generateRiskTasks;
     </div>
   </div>
 </div>
-
 <script>
-// Initialize all charts when Charts panel becomes visible
 let chartsInstances = {};
+let cachedChartData = null;
 
-function initAllCharts() {
-  // KPI Bar Chart
-  const kpiCtx = document.getElementById('kpi-chart')?.getContext('2d');
-  if (kpiCtx && !chartsInstances.kpi) {
-    chartsInstances.kpi = new Chart(kpiCtx, {
-      type: 'bar',
-      data: { labels: ['Revenue', 'ESG', 'Digital', 'Talent', 'CX'], datasets: [{ label: 'Current', data: [82, 91, 63, 58, 74], backgroundColor: '#22c55e' }, { label: 'Target', data: [85, 85, 70, 80, 75], backgroundColor: '#38bdf8' }] },
-      options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: { font: { size: 9 } } } } }
-    });
-  }
-  const trendCtx = document.getElementById('kpi-trend')?.getContext('2d');
-  if (trendCtx && !chartsInstances.trend) {
-    chartsInstances.trend = new Chart(trendCtx, {
-      type: 'line', data: { labels: ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'], datasets: [{ label: 'Revenue', data: [78, 79, 80, 81, 82, 82], borderColor: '#22c55e', fill: false, tension: 0.3 }, { label: 'Digital', data: [55, 58, 60, 62, 63, 63], borderColor: '#f59e0b', fill: false, tension: 0.3 }, { label: 'Talent', data: [65, 63, 61, 60, 59, 58], borderColor: '#ef4444', fill: false, tension: 0.3 }] },
-      options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: { font: { size: 9 } } } } }
-    });
-  }
-  const riskTrendCtx = document.getElementById('risk-trend-chart')?.getContext('2d');
-  if (riskTrendCtx && !chartsInstances.riskTrend) {
-    chartsInstances.riskTrend = new Chart(riskTrendCtx, {
-      type: 'line', data: { labels: ['W1', 'W2', 'W3', 'W4'], datasets: [{ label: 'Cyber', data: [18, 20, 22, 24], borderColor: '#ef4444', fill: false }, { label: 'Vendor', data: [16, 17, 18, 20], borderColor: '#f59e0b', fill: false }, { label: 'DT', data: [15, 16, 18, 20], borderColor: '#f59e0b', fill: false }] },
-      options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: { font: { size: 9 } } } } }
-    });
-  }
-  const projCtx = document.getElementById('projects-chart')?.getContext('2d');
-  if (projCtx && !chartsInstances.projects) {
-    chartsInstances.projects = new Chart(projCtx, {
-      type: 'bar', data: { labels: ['DT', 'MEA', 'Cyber', 'Talent', 'CX'], datasets: [{ label: 'Budget ($M)', data: [14.2, 8.5, 4.1, 3.8, 7.6], backgroundColor: '#38bdf8' }, { label: 'Spent ($M)', data: [13.1, 1.9, 2.5, 2.1, 5.6], backgroundColor: '#ef4444' }] },
-      options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: { font: { size: 9 } } } } }
-    });
-  }
-  const statusCtx = document.getElementById('projects-status')?.getContext('2d');
-  if (statusCtx && !chartsInstances.projStatus) {
-    chartsInstances.projStatus = new Chart(statusCtx, { type: 'doughnut', data: { labels: ['On Track', 'At Risk', 'Off-Track'], datasets: [{ data: [3, 2, 2], backgroundColor: ['#22c55e', '#f59e0b', '#ef4444'] }] }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: { font: { size: 9 } } } } } });
-  }
-  const compCtx = document.getElementById('compliance-chart')?.getContext('2d');
-  if (compCtx && !chartsInstances.compliance) {
-    chartsInstances.compliance = new Chart(compCtx, { type: 'bar', data: { labels: ['SOC2', 'GDPR', 'ISO27001'], datasets: [{ label: 'Score (%)', data: [100, 96, 85], backgroundColor: '#22c55e' }] }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } } });
-  }
-  const compPieCtx = document.getElementById('compliance-pie')?.getContext('2d');
-  if (compPieCtx && !chartsInstances.compPie) {
-    chartsInstances.compPie = new Chart(compPieCtx, { type: 'doughnut', data: { labels: ['Passing', 'At Risk'], datasets: [{ data: [78, 5], backgroundColor: ['#22c55e', '#f59e0b'] }] }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: { font: { size: 9 } } } } } });
-  }
-  const incCtx = document.getElementById('incidents-chart')?.getContext('2d');
-  if (incCtx && !chartsInstances.incidents) {
-    chartsInstances.incidents = new Chart(incCtx, { type: 'line', data: { labels: ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8'], datasets: [{ label: 'P1', data: [1, 0, 0, 1, 0, 0, 0, 1], borderColor: '#ef4444', fill: false }, { label: 'P2', data: [2, 1, 1, 2, 1, 1, 1, 2], borderColor: '#f59e0b', fill: false }, { label: 'P3', data: [3, 2, 2, 1, 2, 1, 1, 1], borderColor: '#38bdf8', fill: false }] }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: { font: { size: 9 } } } } } });
-  }
-  const regionCtx = document.getElementById('incidents-region')?.getContext('2d');
-  if (regionCtx && !chartsInstances.incRegion) {
-    chartsInstances.incRegion = new Chart(regionCtx, { type: 'doughnut', data: { labels: ['APAC', 'EMEA', 'NA'], datasets: [{ data: [3, 1, 0], backgroundColor: ['#ef4444', '#f59e0b', '#22c55e'] }] }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: { font: { size: 9 } } } } } });
-  }
-  const auditCtx = document.getElementById('audit-chart')?.getContext('2d');
-  if (auditCtx && !chartsInstances.audit) {
-    chartsInstances.audit = new Chart(auditCtx, { type: 'bar', data: { labels: ['Current', 'Target'], datasets: [{ label: 'Readiness (%)', data: [78, 90], backgroundColor: ['#38bdf8', '#22c55e'] }] }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } } });
-  }
-  const auditPieCtx = document.getElementById('audit-pie')?.getContext('2d');
-  if (auditPieCtx && !chartsInstances.auditPie) {
-    chartsInstances.auditPie = new Chart(auditPieCtx, { type: 'doughnut', data: { labels: ['Critical', 'High', 'Medium', 'Low'], datasets: [{ data: [1, 2, 1, 0], backgroundColor: ['#ef4444', '#f59e0b', '#38bdf8', '#22c55e'] }] }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: { font: { size: 9 } } } } } });
-  }
-  const tasksCtx = document.getElementById('tasks-chart')?.getContext('2d');
-  if (tasksCtx && !chartsInstances.tasks) {
-    chartsInstances.tasks = new Chart(tasksCtx, { type: 'doughnut', data: { labels: ['Completed', 'Pending', 'Overdue'], datasets: [{ data: [41, 12, 3], backgroundColor: ['#22c55e', '#38bdf8', '#ef4444'] }] }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: { font: { size: 9 } } } } } });
-  }
-  const tasksBarCtx = document.getElementById('tasks-bar')?.getContext('2d');
-  if (tasksBarCtx && !chartsInstances.tasksBar) {
-    chartsInstances.tasksBar = new Chart(tasksBarCtx, { type: 'bar', data: { labels: ['Risk', 'Finance', 'Strategy', 'Audit', 'HR'], datasets: [{ label: 'Tasks', data: [8, 6, 5, 4, 3], backgroundColor: '#38bdf8' }] }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } } });
-  }
-  const meetCtx = document.getElementById('meetings-chart')?.getContext('2d');
-  if (meetCtx && !chartsInstances.meetings) {
-    chartsInstances.meetings = new Chart(meetCtx, { type: 'line', data: { labels: ['Oct 8', 'Oct 12', 'Oct 15', 'Oct 18', 'Oct 21', 'Oct 25'], datasets: [{ label: 'Meetings', data: [0, 1, 1, 1, 1, 0], borderColor: '#38bdf8', fill: false }] }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } } });
-  }
-  const meetPieCtx = document.getElementById('meetings-pie')?.getContext('2d');
-  if (meetPieCtx && !chartsInstances.meetPie) {
-    chartsInstances.meetPie = new Chart(meetPieCtx, { type: 'doughnut', data: { labels: ['Completed', 'Open', 'Overdue'], datasets: [{ data: [8, 2, 0], backgroundColor: ['#22c55e', '#38bdf8', '#ef4444'] }] }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: { font: { size: 9 } } } } } });
-  }
-  renderRiskHeatmap();
+async function fetchChartData() {
+  if (cachedChartData) return cachedChartData;
+  if (typeof window.isTokenValid === 'function' && !window.isTokenValid()) return null;
+  try {
+    const af = window.authFetch || fetch;
+    const [statsResp, incidentsResp, tasksResp, meetingsResp, scorecardsResp, projectsResp, budgetsResp, risksResp] = await Promise.all([
+      af((window.BACKEND || '') + '/dashboard/stats', { cache: 'no-store' }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+      af((window.BACKEND || '') + '/incidents', { cache: 'no-store' }).then(r => r.ok ? r.json() : []).catch(() => []),
+      af((window.BACKEND || '') + '/tasks', { cache: 'no-store' }).then(r => r.ok ? r.json() : []).catch(() => []),
+      af((window.BACKEND || '') + '/meetings', { cache: 'no-store' }).then(r => r.ok ? r.json() : []).catch(() => []),
+      af((window.BACKEND || '') + '/scorecards', { cache: 'no-store' }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+      af((window.BACKEND || '') + '/projects', { cache: 'no-store' }).then(r => r.ok ? r.json() : []).catch(() => []),
+      af((window.BACKEND || '') + '/budgets', { cache: 'no-store' }).then(r => r.ok ? r.json() : []).catch(() => []),
+      af((window.BACKEND || '') + '/risks', { cache: 'no-store' }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
+    ]);
+    cachedChartData = { stats: statsResp, incidents: incidentsResp, tasks: tasksResp, meetings: meetingsResp, scorecards: scorecardsResp, projects: projectsResp, budgets: budgetsResp, risks: risksResp };
+    return cachedChartData;
+  } catch(e) { console.warn('Chart data fetch failed', e); return null; }
 }
 
-function renderRiskHeatmap() {
+async function initAllCharts() {
+  const d = await fetchChartData();
+  if (!d) { Object.keys(chartsInstances).forEach(k => { try { chartsInstances[k].destroy(); } catch(e){} }); chartsInstances = {}; return; }
+  const s = d.stats || {};
+  const incidentsList = Array.isArray(d.incidents) ? d.incidents : (d.incidents?.incidents || d.incidents?.list || []);
+  const tasksList = Array.isArray(d.tasks) ? d.tasks : (d.tasks?.tasks || d.tasks?.list || []);
+  const meetingsList = Array.isArray(d.meetings) ? d.meetings : (d.meetings?.meetings || d.meetings?.list || []);
+  const scorecardRows = Array.isArray(d.scorecards) ? d.scorecards : (d.scorecards?.scorecards || []);
+  const projectsList = Array.isArray(d.projects) ? d.projects : (d.projects?.projects || d.projects?.list || []);
+  const budgetRows = Array.isArray(d.budgets) ? d.budgets : (d.budgets?.budgets || d.budgets?.list || []);
+  const riskRows = Array.isArray(d.risks) ? d.risks : (d.risks?.risks || []);
+
+  // Destroy existing charts to avoid duplication
+  Object.keys(chartsInstances).forEach(k => { try { chartsInstances[k].destroy(); } catch(e){} });
+  chartsInstances = {};
+
+  const green = '#22c55e', blue = '#38bdf8', amber = '#f59e0b', red = '#ef4444';
+  const font9 = { font: { size: 9 } };
+
+  // 1. KPI Bar Chart — scorecard perspective averages
+  {
+    const ctx = document.getElementById('kpi-chart')?.getContext('2d');
+    if (ctx) {
+      const perspectives = {};
+      scorecardRows.forEach(r => {
+        const p = r.perspective || 'General';
+        if (!perspectives[p]) perspectives[p] = [];
+        perspectives[p].push(parseFloat(r.actual || r.actualValue || r.score || 0));
+      });
+      const labels = Object.keys(perspectives).slice(0, 6);
+      const current = labels.map(p => {
+        const vals = perspectives[p];
+        return Math.round(vals.reduce((a,b)=>a+b,0) / vals.length);
+      });
+      chartsInstances.kpi = new Chart(ctx, {
+        type: 'bar',
+        data: { labels, datasets: [{ label: 'Current', data: current.length ? current : [0], backgroundColor: green }, { label: 'Target', data: labels.map(() => 80), backgroundColor: blue }] },
+        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: font9 } } }
+      });
+    }
+  }
+
+  // 2. KPI Trend — use dashboard stats
+  {
+    const ctx = document.getElementById('kpi-trend')?.getContext('2d');
+    if (ctx) {
+      chartsInstances.trend = new Chart(ctx, {
+        type: 'line', data: { labels: ['Current'], datasets: [
+          { label: 'Avg Progress', data: [s.avg_progress || 0], borderColor: green, fill: false, tension: 0.3 },
+          { label: 'Compliance', data: [s.compliance_score || 0], borderColor: blue, fill: false, tension: 0.3 },
+        ]},
+        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: font9 } } }
+      });
+    }
+  }
+
+  // 3. Risk Trend — from risk data
+  {
+    const ctx = document.getElementById('risk-trend-chart')?.getContext('2d');
+    if (ctx) {
+      const high = riskRows.filter(r => (r.resHeat || r.residualHeat || 0) >= 15).length;
+      const crit = riskRows.filter(r => (r.resHeat || r.residualHeat || 0) >= 20).length;
+      chartsInstances.riskTrend = new Chart(ctx, {
+        type: 'line', data: { labels: ['Active', 'High', 'Critical'], datasets: [
+          { label: 'Risks', data: [riskRows.length || 0, high || 0, crit || 0], borderColor: red, fill: false },
+        ]},
+        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: font9 } } }
+      });
+    }
+  }
+
+  // 4. Projects Bar
+  {
+    const ctx = document.getElementById('projects-chart')?.getContext('2d');
+    if (ctx) {
+      const projLabels = projectsList.slice(0, 6).map(p => p.name || p.projectName || p.project_name || 'P');
+      const budgets = projectsList.slice(0, 6).map(p => parseFloat((p.budget || p.totalBudget || 0) / 1000000).toFixed(1));
+      chartsInstances.projects = new Chart(ctx, {
+        type: 'bar', data: { labels: projLabels.length ? projLabels : ['No Data'], datasets: [
+          { label: 'Budget ($M)', data: budgets.length ? budgets : [0], backgroundColor: blue },
+        ]},
+        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: font9 } } }
+      });
+    }
+  }
+
+  // 5. Projects Status Doughnut
+  {
+    const ctx = document.getElementById('projects-status')?.getContext('2d');
+    if (ctx) {
+      const onTrack = projectsList.filter(p => (p.status || '').includes('track') || (p.status || '').includes('progress')).length;
+      const atRisk = projectsList.filter(p => (p.status || '').includes('risk')).length;
+      const offTrack = projectsList.filter(p => (p.status || '').includes('off') || (p.status || '').includes('delay')).length;
+      const other = projectsList.length - onTrack - atRisk - offTrack;
+      chartsInstances.projStatus = new Chart(ctx, { type: 'doughnut', data: {
+        labels: ['On Track','At Risk','Off Track','Other'],
+        datasets: [{ data: [onTrack || 1, atRisk || 0, offTrack || 0, other || 0], backgroundColor: [green, amber, red, blue] }]
+      }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: font9 } } } });
+    }
+  }
+
+  // 6. Compliance Bar
+  {
+    const ctx = document.getElementById('compliance-chart')?.getContext('2d');
+    if (ctx) {
+      chartsInstances.compliance = new Chart(ctx, { type: 'bar', data: {
+        labels: ['Compliance Score'],
+        datasets: [{ label: 'Score (%)', data: [s.compliance_score || 0], backgroundColor: s.compliance_score >= 80 ? green : s.compliance_score >= 60 ? amber : red }]
+      }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } } });
+    }
+  }
+
+  // 7. Compliance Pie
+  {
+    const ctx = document.getElementById('compliance-pie')?.getContext('2d');
+    if (ctx) {
+      chartsInstances.compPie = new Chart(ctx, { type: 'doughnut', data: {
+        labels: ['Compliant', 'At Risk'],
+        datasets: [{ data: [Math.max(1, s.compliance_score || 80), Math.max(0, 100 - (s.compliance_score || 80))], backgroundColor: [green, amber] }]
+      }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: font9 } } } });
+    }
+  }
+
+  // 8. Incidents Line
+  {
+    const ctx = document.getElementById('incidents-chart')?.getContext('2d');
+    if (ctx) {
+      const p1 = incidentsList.filter(i => (i.severity || '').toUpperCase() === 'P1').length;
+      const p2 = incidentsList.filter(i => (i.severity || '').toUpperCase() === 'P2').length;
+      const p3 = incidentsList.filter(i => (i.severity || '').toUpperCase() === 'P3' || !['P1','P2'].includes((i.severity || '').toUpperCase())).length;
+      chartsInstances.incidents = new Chart(ctx, { type: 'line', data: {
+        labels: ['P1', 'P2', 'P3+'],
+        datasets: [{ label: 'Incidents', data: [p1 || 0, p2 || 0, p3 || 0], borderColor: red, fill: false }]
+      }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: font9 } } } });
+    }
+  }
+
+  // 9. Incidents Region
+  {
+    const ctx = document.getElementById('incidents-region')?.getContext('2d');
+    if (ctx) {
+      const regionCounts = {};
+      incidentsList.forEach(i => { const r = i.region || 'Unknown'; regionCounts[r] = (regionCounts[r] || 0) + 1; });
+      const labels = Object.keys(regionCounts).slice(0, 5);
+      const data = labels.map(l => regionCounts[l]);
+      chartsInstances.incRegion = new Chart(ctx, { type: 'doughnut', data: {
+        labels: labels.length ? labels : ['No Data'],
+        datasets: [{ data: data.length ? data : [1], backgroundColor: [red, amber, green, blue, '#a78bfa'] }]
+      }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: font9 } } } });
+    }
+  }
+
+  // 10. Audit Readiness Bar
+  {
+    const ctx = document.getElementById('audit-chart')?.getContext('2d');
+    if (ctx) {
+      chartsInstances.audit = new Chart(ctx, { type: 'bar', data: {
+        labels: ['Compliance Score'],
+        datasets: [{ label: 'Readiness (%)', data: [s.compliance_score || 0], backgroundColor: blue }]
+      }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } } });
+    }
+  }
+
+  // 11. Audit Findings Pie
+  {
+    const ctx = document.getElementById('audit-pie')?.getContext('2d');
+    if (ctx) {
+      const crit = s.severity_breakdown?.P1 || 0;
+      const high = s.high_risks || 0;
+      chartsInstances.auditPie = new Chart(ctx, { type: 'doughnut', data: {
+        labels: ['Critical', 'High', 'Other'],
+        datasets: [{ data: [crit || 0, high || 0, Math.max(1, ((s.total_incidents||0) - crit - high))], backgroundColor: [red, amber, blue] }]
+      }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: font9 } } } });
+    }
+  }
+
+  // 12. Tasks Doughnut
+  {
+    const ctx = document.getElementById('tasks-chart')?.getContext('2d');
+    if (ctx) {
+      const completed = tasksList.filter(t => (t.status || '').toLowerCase() === 'completed' || (t.status || '').toLowerCase() === 'done').length;
+      const pending = tasksList.filter(t => (t.status || '').toLowerCase() === 'pending' || (t.status || '').toLowerCase() === 'open').length;
+      const overdue = tasksList.filter(t => (t.status || '').toLowerCase() === 'overdue' || (t.status || '').toLowerCase() === 'delayed').length;
+      chartsInstances.tasks = new Chart(ctx, { type: 'doughnut', data: {
+        labels: ['Completed', 'Pending', 'Other'],
+        datasets: [{ data: [completed || 0, pending || 0, Math.max(1, tasksList.length - completed - pending)], backgroundColor: [green, blue, red] }]
+      }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: font9 } } } });
+    }
+  }
+
+  // 13. Tasks Bar
+  {
+    const ctx = document.getElementById('tasks-bar')?.getContext('2d');
+    if (ctx) {
+      chartsInstances.tasksBar = new Chart(ctx, { type: 'bar', data: {
+        labels: ['Total Tasks'],
+        datasets: [{ label: 'Tasks', data: [s.total_tasks || tasksList.length || 0], backgroundColor: blue }]
+      }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } } });
+    }
+  }
+
+  // 14. Meetings Line
+  {
+    const ctx = document.getElementById('meetings-chart')?.getContext('2d');
+    if (ctx) {
+      chartsInstances.meetings = new Chart(ctx, { type: 'line', data: {
+        labels: ['Total'],
+        datasets: [{ label: 'Meetings', data: [meetingsList.length || 0], borderColor: blue, fill: false }]
+      }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } } });
+    }
+  }
+
+  // 15. Meetings Pie
+  {
+    const ctx = document.getElementById('meetings-pie')?.getContext('2d');
+    if (ctx) {
+      chartsInstances.meetPie = new Chart(ctx, { type: 'doughnut', data: {
+        labels: ['Scheduled', 'Completed'],
+        datasets: [{ data: [meetingsList.length || 1, 0], backgroundColor: [blue, green] }]
+      }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top', labels: font9 } } } });
+    }
+  }
+
+  // 16. Risk Heatmap — from live risk data
+  window.lastRiskRows = riskRows;
+  renderRiskHeatmap(riskRows);
+}
+
+function renderRiskHeatmap(riskRows) {
   const container = document.getElementById('risk-heatmap-chart');
   if (!container) return;
-  const heatData = {
-    5: { 5: { count: 1, names: ['Cyber Breach'], heat: 25 }, 4: { count: 1, names: ['APAC Vendor'], heat: 20 }, 3: { count: 0, names: [], heat: 15 }, 2: { count: 0, names: [], heat: 10 }, 1: { count: 0, names: [], heat: 5 } },
-    4: { 5: { count: 1, names: ['DT Failure'], heat: 20 }, 4: { count: 1, names: ['Market Volatility'], heat: 16 }, 3: { count: 1, names: ['Talent Attrition'], heat: 12 }, 2: { count: 0, names: [], heat: 8 }, 1: { count: 0, names: [], heat: 4 } },
-    3: { 5: { count: 0, names: [], heat: 15 }, 4: { count: 1, names: ['Regulatory Fine'], heat: 12 }, 3: { count: 1, names: ['Cloud Outage'], heat: 9 }, 2: { count: 0, names: [], heat: 6 }, 1: { count: 0, names: [], heat: 3 } },
-    2: { 5: { count: 1, names: ['Vendor Insolvency'], heat: 10 }, 4: { count: 1, names: ['Data Leak'], heat: 8 }, 3: { count: 1, names: ['Office Disruption'], heat: 6 }, 2: { count: 0, names: [], heat: 4 }, 1: { count: 0, names: [], heat: 2 } },
-    1: { 5: { count: 0, names: [], heat: 5 }, 4: { count: 0, names: [], heat: 4 }, 3: { count: 1, names: ['Interest Rate'], heat: 3 }, 2: { count: 0, names: [], heat: 2 }, 1: { count: 0, names: [], heat: 1 } }
-  };
+  const rows = riskRows || [];
+  const heatData = {};
+  for (let l = 1; l <= 5; l++) { heatData[l] = {}; for (let i = 1; i <= 5; i++) heatData[l][i] = { count: 0, names: [], heat: l * i }; }
+  rows.forEach(r => {
+    const l = parseInt(r.inherentLikelihood || r.inhL || r.inherent_likelihood || r.resL || r.residualLikelihood || 1);
+    const i = parseInt(r.inherentImpact || r.inhI || r.inherent_impact || r.resI || r.residualImpact || 1);
+    const name = r.riskName || r.name || r.risk_name || '';
+    if (l >= 1 && l <= 5 && i >= 1 && i <= 5) {
+      heatData[l][i].count++;
+      if (name) heatData[l][i].names.push(name);
+    }
+  });
   function getHeatColor(heat) {
     if (heat >= 20) return { bg: 'rgba(239,68,68,0.3)', border: '#ef4444', text: '#ef4444' };
     if (heat >= 15) return { bg: 'rgba(245,158,11,0.25)', border: '#f59e0b', text: '#f59e0b' };
@@ -10424,7 +10557,7 @@ function renderRiskHeatmap() {
       html += `<td style="padding:8px 4px;background:${colors.bg};border:1px solid ${colors.border};border-radius:6px;text-align:center;">`;
       if (cell.count > 0) {
         html += `<div style="font-size:14px;font-weight:800;color:${colors.text};">${cell.heat}</div>`;
-        html += `<div style="font-size:7px;color:var(--text3);">${cell.names[0]}</div>`;
+        html += `<div style="font-size:7px;color:var(--text3);">${cell.names[0] || ''}</div>`;
       } else {
         html += `<div style="font-size:12px;opacity:0.3;">—</div>`;
       }
@@ -10435,19 +10568,18 @@ function renderRiskHeatmap() {
   html += '</tbody></table>';
   container.innerHTML = html;
 }
-
 function switchChartModule(module, btn) {
   document.querySelectorAll('.chart-module-panel').forEach(p => p.classList.remove('active'));
   const targetPanel = document.getElementById(`chart-module-${module}`);
   if (targetPanel) targetPanel.classList.add('active');
   document.querySelectorAll('.chart-module-tab').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
-  if (module === 'risk') setTimeout(renderRiskHeatmap, 50);
+  if (module === 'risk') renderRiskHeatmap(window.lastRiskRows || []);
 }
 
 function refreshAllCharts() {
-  Object.values(chartsInstances).forEach(chart => { if (chart && typeof chart.update === 'function') chart.update(); });
-  renderRiskHeatmap();
+  cachedChartData = null;
+  initAllCharts();
 }
 
 function exportChartsDashboard() { alert('📎 Export feature: Would generate PDF/PNG of all visible charts'); }
@@ -10455,9 +10587,9 @@ function refreshSignals(module) { alert(`🔄 Refreshing ${module} signals...`);
 function refreshRecs(module) { alert(`⚡ Generating fresh recommendations for ${module}...`); }
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', function() { setTimeout(initAllCharts, 100); });
+  document.addEventListener('DOMContentLoaded', function() { setTimeout(() => initAllCharts(), 100); });
 } else {
-  setTimeout(initAllCharts, 100);
+  setTimeout(() => initAllCharts(), 100);
 }
 
 const _navCharts = window.navigate;
@@ -11712,11 +11844,11 @@ if (_navCharts) {
 
       <!-- Portfolio Stats -->
       <div class="kpi-row">
-        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--blue);font-family:'Trebuchet MS',system-ui,sans-serif">7</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Active Initiatives</div></div>
-        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--green);font-family:'Trebuchet MS',system-ui,sans-serif">3</div><div style="font-size:11px;color:var(--text3);margin-top:2px">On Track</div></div>
-        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--amber);font-family:'Trebuchet MS',system-ui,sans-serif">2</div><div style="font-size:11px;color:var(--text3);margin-top:2px">At Risk</div></div>
-        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--red);font-family:'Trebuchet MS',system-ui,sans-serif">2</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Off-Track</div></div>
-        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--purple);font-family:'Trebuchet MS',system-ui,sans-serif">$48M</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Portfolio Budget</div></div>
+        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--blue);font-family:'Trebuchet MS',system-ui,sans-serif" id="proj-kpi-active">—</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Active Initiatives</div></div>
+        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--green);font-family:'Trebuchet MS',system-ui,sans-serif" id="proj-kpi-ontrack">—</div><div style="font-size:11px;color:var(--text3);margin-top:2px">On Track</div></div>
+        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--amber);font-family:'Trebuchet MS',system-ui,sans-serif" id="proj-kpi-atrisk">—</div><div style="font-size:11px;color:var(--text3);margin-top:2px">At Risk</div></div>
+        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--red);font-family:'Trebuchet MS',system-ui,sans-serif" id="proj-kpi-offtrack">—</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Off-Track</div></div>
+        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--purple);font-family:'Trebuchet MS',system-ui,sans-serif" id="proj-kpi-budget">—</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Portfolio Budget</div></div>
       </div>
 
       <!-- AI Portfolio Brief -->
@@ -11737,63 +11869,8 @@ if (_navCharts) {
                 <th style="padding:9px 12px;font-weight:600;color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid var(--border)">Status</th>
               </tr>
             </thead>
-            <tbody>
-              <tr style="border-bottom:1px solid var(--border)">
-                <td style="padding:10px 12px;font-weight:600;color:var(--text)">Digital Transformation Programme</td>
-                <td style="padding:10px 12px;color:var(--text2)">CTO</td>
-                <td style="padding:10px 12px;color:var(--text2)">$14.2M</td>
-                <td style="padding:10px 12px"><div style="background:var(--border);border-radius:4px;height:6px;width:120px"><div style="background:var(--red);border-radius:4px;height:6px;width:38%"></div></div><span style="font-size:11px;color:var(--text3);font-family:'JetBrains Mono','Courier New',monospace;margin-left:6px">38%</span></td>
-                <td style="padding:10px 12px;color:var(--text3);font-family:'JetBrains Mono','Courier New',monospace;font-size:11px">Dec 31</td>
-                <td style="padding:10px 12px"><span style="background:var(--red-dim);color:var(--red);border-radius:6px;font-size:10px;padding:3px 8px;font-weight:600">Off-Track</span></td>
-              </tr>
-              <tr style="border-bottom:1px solid var(--border)">
-                <td style="padding:10px 12px;font-weight:600;color:var(--text)">MEA Market Entry</td>
-                <td style="padding:10px 12px;color:var(--text2)">CCO</td>
-                <td style="padding:10px 12px;color:var(--text2)">$8.5M</td>
-                <td style="padding:10px 12px"><div style="background:var(--border);border-radius:4px;height:6px;width:120px"><div style="background:var(--red);border-radius:4px;height:6px;width:22%"></div></div><span style="font-size:11px;color:var(--text3);font-family:'JetBrains Mono','Courier New',monospace;margin-left:6px">22%</span></td>
-                <td style="padding:10px 12px;color:var(--text3);font-family:'JetBrains Mono','Courier New',monospace;font-size:11px">Mar 31</td>
-                <td style="padding:10px 12px"><span style="background:var(--red-dim);color:var(--red);border-radius:6px;font-size:10px;padding:3px 8px;font-weight:600">Off-Track</span></td>
-              </tr>
-              <tr style="border-bottom:1px solid var(--border)">
-                <td style="padding:10px 12px;font-weight:600;color:var(--text)">Cybersecurity Uplift</td>
-                <td style="padding:10px 12px;color:var(--text2)">CISO</td>
-                <td style="padding:10px 12px;color:var(--text2)">$4.1M</td>
-                <td style="padding:10px 12px"><div style="background:var(--border);border-radius:4px;height:6px;width:120px"><div style="background:var(--amber);border-radius:4px;height:6px;width:61%"></div></div><span style="font-size:11px;color:var(--text3);font-family:'JetBrains Mono','Courier New',monospace;margin-left:6px">61%</span></td>
-                <td style="padding:10px 12px;color:var(--text3);font-family:'JetBrains Mono','Courier New',monospace;font-size:11px">Nov 30</td>
-                <td style="padding:10px 12px"><span style="background:var(--amber-dim);color:var(--amber);border-radius:6px;font-size:10px;padding:3px 8px;font-weight:600">At Risk</span></td>
-              </tr>
-              <tr style="border-bottom:1px solid var(--border)">
-                <td style="padding:10px 12px;font-weight:600;color:var(--text)">Talent &amp; Culture Transformation</td>
-                <td style="padding:10px 12px;color:var(--text2)">CHRO</td>
-                <td style="padding:10px 12px;color:var(--text2)">$3.8M</td>
-                <td style="padding:10px 12px"><div style="background:var(--border);border-radius:4px;height:6px;width:120px"><div style="background:var(--amber);border-radius:4px;height:6px;width:54%"></div></div><span style="font-size:11px;color:var(--text3);font-family:'JetBrains Mono','Courier New',monospace;margin-left:6px">54%</span></td>
-                <td style="padding:10px 12px;color:var(--text3);font-family:'JetBrains Mono','Courier New',monospace;font-size:11px">Dec 31</td>
-                <td style="padding:10px 12px"><span style="background:var(--amber-dim);color:var(--amber);border-radius:6px;font-size:10px;padding:3px 8px;font-weight:600">At Risk</span></td>
-              </tr>
-              <tr style="border-bottom:1px solid var(--border)">
-                <td style="padding:10px 12px;font-weight:600;color:var(--text)">Customer Experience Platform</td>
-                <td style="padding:10px 12px;color:var(--text2)">CPO</td>
-                <td style="padding:10px 12px;color:var(--text2)">$7.6M</td>
-                <td style="padding:10px 12px"><div style="background:var(--border);border-radius:4px;height:6px;width:120px"><div style="background:var(--green);border-radius:4px;height:6px;width:74%"></div></div><span style="font-size:11px;color:var(--text3);font-family:'JetBrains Mono','Courier New',monospace;margin-left:6px">74%</span></td>
-                <td style="padding:10px 12px;color:var(--text3);font-family:'JetBrains Mono','Courier New',monospace;font-size:11px">Nov 15</td>
-                <td style="padding:10px 12px"><span style="background:var(--green-dim);color:var(--green);border-radius:6px;font-size:10px;padding:3px 8px;font-weight:600">On Track</span></td>
-              </tr>
-              <tr style="border-bottom:1px solid var(--border)">
-                <td style="padding:10px 12px;font-weight:600;color:var(--text)">Supply Chain Resilience</td>
-                <td style="padding:10px 12px;color:var(--text2)">COO</td>
-                <td style="padding:10px 12px;color:var(--text2)">$5.9M</td>
-                <td style="padding:10px 12px"><div style="background:var(--border);border-radius:4px;height:6px;width:120px"><div style="background:var(--green);border-radius:4px;height:6px;width:81%"></div></div><span style="font-size:11px;color:var(--text3);font-family:'JetBrains Mono','Courier New',monospace;margin-left:6px">81%</span></td>
-                <td style="padding:10px 12px;color:var(--text3);font-family:'JetBrains Mono','Courier New',monospace;font-size:11px">Oct 31</td>
-                <td style="padding:10px 12px"><span style="background:var(--green-dim);color:var(--green);border-radius:6px;font-size:10px;padding:3px 8px;font-weight:600">On Track</span></td>
-              </tr>
-              <tr>
-                <td style="padding:10px 12px;font-weight:600;color:var(--text)">ESG Reporting Framework</td>
-                <td style="padding:10px 12px;color:var(--text2)">CFO</td>
-                <td style="padding:10px 12px;color:var(--text2)">$3.9M</td>
-                <td style="padding:10px 12px"><div style="background:var(--border);border-radius:4px;height:6px;width:120px"><div style="background:var(--green);border-radius:4px;height:6px;width:67%"></div></div><span style="font-size:11px;color:var(--text3);font-family:'JetBrains Mono','Courier New',monospace;margin-left:6px">67%</span></td>
-                <td style="padding:10px 12px;color:var(--text3);font-family:'JetBrains Mono','Courier New',monospace;font-size:11px">Jan 31</td>
-                <td style="padding:10px 12px"><span style="background:var(--green-dim);color:var(--green);border-radius:6px;font-size:10px;padding:3px 8px;font-weight:600">On Track</span></td>
-              </tr>
+            <tbody id="initiatives-table">
+              <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Loading initiatives from database...</td></tr>
             </tbody>
           </table>
         </div>
@@ -12283,15 +12360,11 @@ if (_navCharts) {
     <div class="panel" id="view-compliance">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><div class="section-label" style="margin-bottom:0">Compliance · SOC2 · GDPR · ISO 27001</div><button class="btn btn-primary">+ New Obligation</button></div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
-        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--green);font-family:'Trebuchet MS',system-ui,sans-serif">96%</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Overall Score</div></div>
-        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--amber);font-family:'Trebuchet MS',system-ui,sans-serif">1</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Control Gap</div></div>
-        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--blue);font-family:'Trebuchet MS',system-ui,sans-serif">Jun 15</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Next GDPR Audit</div></div>
+        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--green);font-family:'Trebuchet MS',system-ui,sans-serif" id="comp-kpi-score">—</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Overall Score</div></div>
+        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--amber);font-family:'Trebuchet MS',system-ui,sans-serif" id="comp-kpi-gaps">—</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Control Gaps</div></div>
+        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--blue);font-family:'Trebuchet MS',system-ui,sans-serif" id="comp-kpi-next">—</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Next Audit</div></div>
       </div>
-      <div class="card"><div class="card-title">⚖ Compliance Framework Status</div><div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
-        <div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--green-dim);border-radius:8px;border:1px solid var(--green-border)"><span style="font-size:16px">✅</span><div style="flex:1"><div style="font-size:12px;font-weight:600">SOC2 Type II</div><div style="font-size:11px;color:var(--text3)">All controls passing · Last reviewed Oct 1</div></div><span style="color:var(--green);font-size:11px;font-weight:600">PASS</span></div>
-        <div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--green-dim);border-radius:8px;border:1px solid var(--green-border)"><span style="font-size:16px">✅</span><div style="flex:1"><div style="font-size:12px;font-weight:600">GDPR</div><div style="font-size:11px;color:var(--text3)">Data processing agreements current · Audit Jun 15</div></div><span style="color:var(--green);font-size:11px;font-weight:600">PASS</span></div>
-        <div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--amber-dim);border-radius:8px;border:1px solid var(--amber-border)"><span style="font-size:16px">⚠</span><div style="flex:1"><div style="font-size:12px;font-weight:600">Data Retention Policy</div><div style="font-size:11px;color:var(--text3)">Minor gap identified — remediation in progress</div></div><span style="color:var(--amber);font-size:11px;font-weight:600">GAP</span></div>
-      </div></div>
+      <div class="card"><div class="card-title">⚖ Compliance Framework Status</div><div id="compliance-frameworks-list" style="margin-top:10px;display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--text3);padding:10px;text-align:center">Loading compliance frameworks...</div></div>
 
       <!-- ── AI Intelligence Suite ── -->
       <div style="margin-top:16px">
@@ -12389,21 +12462,16 @@ if (_navCharts) {
 
       <!-- KPI Stats Row -->
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
-        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--amber);font-family:'Trebuchet MS',system-ui,sans-serif">4</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Open Findings</div></div>
-        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--blue2);font-family:'Trebuchet MS',system-ui,sans-serif">78%</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Readiness Score</div></div>
-        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--text);font-family:'Trebuchet MS',system-ui,sans-serif">14d</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Next Audit</div></div>
-        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--green);font-family:'Trebuchet MS',system-ui,sans-serif">3</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Cycles Complete</div></div>
+        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--amber);font-family:'Trebuchet MS',system-ui,sans-serif" id="audit-kpi-open">—</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Open Findings</div></div>
+        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--blue2);font-family:'Trebuchet MS',system-ui,sans-serif" id="audit-kpi-readiness">—</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Readiness Score</div></div>
+        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--text);font-family:'Trebuchet MS',system-ui,sans-serif" id="audit-kpi-next">—</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Next Audit</div></div>
+        <div class="card" style="padding:14px;text-align:center"><div style="font-size:22px;font-weight:700;color:var(--green);font-family:'Trebuchet MS',system-ui,sans-serif" id="audit-kpi-cycles">—</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Cycles Complete</div></div>
       </div>
 
-      <!-- Open Audit Findings Table -->
+      <!-- Open Audit Findings -->
       <div class="card" style="margin-bottom:16px">
         <div class="card-title">🔍 Open Audit Findings</div>
-        <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
-          <div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--red-dim);border-radius:8px"><span style="font-size:14px">🔴</span><div style="flex:1"><div style="font-size:12px;font-weight:600">Access Control Review — Privileged Accounts</div><div style="font-size:11px;color:var(--text3)">Assigned: CISO · Due: Oct 20</div></div><button class="btn btn-ghost" style="font-size:11px">Update</button></div>
-          <div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--amber-dim);border-radius:8px"><span style="font-size:14px">🟠</span><div style="flex:1"><div style="font-size:12px;font-weight:600">Vendor Due Diligence Documentation Gaps</div><div style="font-size:11px;color:var(--text3)">Assigned: Procurement · Due: Oct 25</div></div><button class="btn btn-ghost" style="font-size:11px">Update</button></div>
-          <div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--amber-dim);border-radius:8px"><span style="font-size:14px">🟡</span><div style="flex:1"><div style="font-size:12px;font-weight:600">Disaster Recovery Test Evidence Missing</div><div style="font-size:11px;color:var(--text3)">Assigned: IT Ops · Due: Oct 22</div></div><button class="btn btn-ghost" style="font-size:11px">Update</button></div>
-          <div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--surface);border-radius:8px"><span style="font-size:14px">🟢</span><div style="flex:1"><div style="font-size:12px;font-weight:600">Security Awareness Training — 72% Completion</div><div style="font-size:11px;color:var(--text3)">Assigned: HR · Due: Nov 1</div></div><button class="btn btn-ghost" style="font-size:11px">Update</button></div>
-        </div>
+        <div id="audit-findings-list" style="margin-top:10px;display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--text3);padding:10px;text-align:center">Loading audit findings...</div>
       </div>
 
       <!-- AI Intelligence Suite -->
@@ -12740,7 +12808,7 @@ window.budgetAPI = (function() {
     const headers = { 'Content-Type': 'application/json', ...options.headers };
     if (token) headers['Authorization'] = 'Bearer ' + token;
     const response = await fetch(API_BASE + endpoint, { ...options, headers });
-    if (response.status === 401) { if (typeof showToast === 'function') showToast('Session expired.', 'error'); return null; }
+    if (response.status === 401) { if (typeof window.handleSessionExpired === 'function') window.handleSessionExpired(); return null; }
     return response.json();
   }
 
@@ -12756,33 +12824,7 @@ window.budgetAPI = (function() {
     } catch (e) {
       console.error('API Error:', e);
       if (loader) loader.innerHTML = '<tr><td colspan="21" style="text-align:center;padding:40px;color:var(--red);">⚠️ Failed to load. Check API connection.</td></tr>';
-      loadMockData();
     }
-  }
-
-  function loadMockData() {
-    allBudgetLines = [
-      {id:1,year:2024,month:"June",version:1,glAccount:"104",glName:"Advertisements",budgetType:"Expense",project:"Manage public affairs",outcome:"OO-1 Enhance operational Efficiency",objective:"Manage public affairs",subInitiative:"Manage public affairs",activity:"Carryout PR initiatives",subActivity:"Publishing advertorials",currency:"USD",qty:1,unitAmount:60000,total:60000,department:"1049",employee:"Nizam Goolam",notes:"Advertorial"},
-      {id:2,year:2024,month:"April",version:1,glAccount:"104",glName:"Advertisements",budgetType:"Expense",project:"Manage public affairs",outcome:"OO-1 Enhance operational Efficiency",objective:"Manage public affairs",subInitiative:"Manage public affairs",activity:"Carryout PR initiatives",subActivity:"Broadcasting",currency:"USD",qty:1,unitAmount:386880,total:386880,department:"1049",employee:"Nizam Goolam",notes:"Radio advert"},
-      {id:3,year:2024,month:"April",version:1,glAccount:"18",glName:"Board Expenses",budgetType:"Expense",project:"Uphold good governance",outcome:"OO-1 Enhance operational Efficiency",objective:"Uphold good governance_EXCO",subInitiative:"Provide secretarial duties",activity:"Meetings",subActivity:"Refreshments",currency:"USD",qty:1,unitAmount:12600,total:12600,department:"1049",employee:"Nizam Goolam",notes:"Lunch"},
-      {id:4,year:2024,month:"May",version:1,glAccount:"18",glName:"Board Expenses",budgetType:"Expense",project:"Uphold good governance",outcome:"OO-2 Strengthen Governance",objective:"Board meetings management",subInitiative:"Quarterly board sessions",activity:"Meetings",subActivity:"Travel & Accommodation",currency:"USD",qty:4,unitAmount:8500,total:34000,department:"1049",employee:"Rachel Kim",notes:"Q2 board travel"},
-      {id:5,year:2024,month:"March",version:1,glAccount:"22",glName:"IT Infrastructure",budgetType:"Capital",project:"Digital Transformation",outcome:"OO-3 Drive Digital Innovation",objective:"Modernise core systems",subInitiative:"Cloud migration phase 1",activity:"Infrastructure Setup",subActivity:"Server procurement",currency:"USD",qty:3,unitAmount:45000,total:135000,department:"1012",employee:"Aiko Tanaka",notes:"AWS reserved instances"},
-      {id:6,year:2024,month:"March",version:1,glAccount:"22",glName:"IT Infrastructure",budgetType:"Capital",project:"Digital Transformation",outcome:"OO-3 Drive Digital Innovation",objective:"Modernise core systems",subInitiative:"Cloud migration phase 1",activity:"Infrastructure Setup",subActivity:"Licensing",currency:"USD",qty:1,unitAmount:28000,total:28000,department:"1012",employee:"Aiko Tanaka",notes:"SaaS enterprise licenses"},
-      {id:7,year:2024,month:"July",version:1,glAccount:"31",glName:"Training & Development",budgetType:"Expense",project:"Build talent pipeline",outcome:"OO-4 Develop People Capability",objective:"Upskill workforce",subInitiative:"Leadership programme",activity:"Learning & Development",subActivity:"External training",currency:"USD",qty:12,unitAmount:3200,total:38400,department:"1033",employee:"Linh Nguyen",notes:"Leadership cohort 2024"},
-      {id:8,year:2024,month:"July",version:1,glAccount:"31",glName:"Training & Development",budgetType:"Expense",project:"Build talent pipeline",outcome:"OO-4 Develop People Capability",objective:"Upskill workforce",subInitiative:"Digital skills",activity:"Learning & Development",subActivity:"Online platforms",currency:"USD",qty:1,unitAmount:15000,total:15000,department:"1033",employee:"Linh Nguyen",notes:"Coursera enterprise"},
-      {id:9,year:2024,month:"August",version:1,glAccount:"55",glName:"Marketing & Events",budgetType:"Expense",project:"Grow market presence",outcome:"OO-5 Accelerate Revenue Growth",objective:"Expand brand visibility",subInitiative:"APAC launch campaign",activity:"Events & Activations",subActivity:"Conference sponsorship",currency:"USD",qty:2,unitAmount:75000,total:150000,department:"1055",employee:"Sarah Mitchell",notes:"APAC summit Q3"},
-      {id:10,year:2024,month:"August",version:1,glAccount:"55",glName:"Marketing & Events",budgetType:"Expense",project:"Grow market presence",outcome:"OO-5 Accelerate Revenue Growth",objective:"Expand brand visibility",subInitiative:"Digital marketing",activity:"Content & Media",subActivity:"Social media ads",currency:"USD",qty:1,unitAmount:42000,total:42000,department:"1055",employee:"Sarah Mitchell",notes:"LinkedIn + Meta Q3"},
-      {id:11,year:2024,month:"September",version:1,glAccount:"67",glName:"Compliance & Legal",budgetType:"Expense",project:"Regulatory compliance programme",outcome:"OO-2 Strengthen Governance",objective:"Achieve regulatory readiness",subInitiative:"GDPR remediation",activity:"Legal Advisory",subActivity:"External counsel",currency:"USD",qty:1,unitAmount:55000,total:55000,department:"1049",employee:"Rachel Kim",notes:"Data protection audit"},
-      {id:12,year:2024,month:"September",version:1,glAccount:"67",glName:"Compliance & Legal",budgetType:"Expense",project:"Regulatory compliance programme",outcome:"OO-2 Strengthen Governance",objective:"Achieve regulatory readiness",subInitiative:"SOC2 certification",activity:"Audit & Assurance",subActivity:"Auditor fees",currency:"USD",qty:1,unitAmount:38000,total:38000,department:"1049",employee:"Priya Sharma",notes:"Deloitte SOC2 audit"},
-      {id:13,year:2024,month:"October",version:1,glAccount:"104",glName:"Advertisements",budgetType:"Expense",project:"Manage public affairs",outcome:"OO-1 Enhance operational Efficiency",objective:"Manage public affairs",subInitiative:"Q4 campaigns",activity:"Carryout PR initiatives",subActivity:"Digital media",currency:"USD",qty:1,unitAmount:92000,total:92000,department:"1049",employee:"Nizam Goolam",notes:"Year-end campaign"},
-      {id:14,year:2024,month:"October",version:1,glAccount:"78",glName:"Operations & Facilities",budgetType:"Expense",project:"Optimise operations",outcome:"OO-1 Enhance operational Efficiency",objective:"Reduce operational cost",subInitiative:"Facilities management",activity:"Premises",subActivity:"Office lease renewal",currency:"USD",qty:12,unitAmount:18500,total:222000,department:"1060",employee:"Marcus Webb",notes:"HQ lease FY2025"},
-      {id:15,year:2024,month:"November",version:1,glAccount:"89",glName:"Research & Innovation",budgetType:"Capital",project:"Innovation lab",outcome:"OO-3 Drive Digital Innovation",objective:"Prototype new products",subInitiative:"AI product R&D",activity:"Research",subActivity:"Prototype development",currency:"USD",qty:1,unitAmount:180000,total:180000,department:"1012",employee:"Daniel Reyes",notes:"AI assistant MVP"},
-      {id:16,year:2024,month:"November",version:1,glAccount:"31",glName:"Training & Development",budgetType:"Expense",project:"Build talent pipeline",outcome:"OO-4 Develop People Capability",objective:"Retention programme",subInitiative:"Employee engagement",activity:"Wellness & Benefits",subActivity:"Team building",currency:"USD",qty:1,unitAmount:22000,total:22000,department:"1033",employee:"Linh Nguyen",notes:"Q4 retreats"},
-      {id:17,year:2025,month:"January",version:1,glAccount:"22",glName:"IT Infrastructure",budgetType:"Capital",project:"Digital Transformation",outcome:"OO-3 Drive Digital Innovation",objective:"Modernise core systems",subInitiative:"Cloud migration phase 2",activity:"Infrastructure Setup",subActivity:"Data migration",currency:"USD",qty:1,unitAmount:95000,total:95000,department:"1012",employee:"Aiko Tanaka",notes:"Phase 2 kickoff"},
-      {id:18,year:2025,month:"February",version:1,glAccount:"55",glName:"Marketing & Events",budgetType:"Expense",project:"Grow market presence",outcome:"OO-5 Accelerate Revenue Growth",objective:"Expand brand visibility",subInitiative:"MEA expansion",activity:"Events & Activations",subActivity:"Launch event",currency:"USD",qty:1,unitAmount:110000,total:110000,department:"1055",employee:"Sarah Mitchell",notes:"MEA market launch"}
-    ];
-    filteredLines = [...allBudgetLines]; renderTable(); updateKPIs();
-    if (typeof showToast === 'function') showToast('Using mock data — API not available', 'warning');
   }
 
   async function fetchGLOptions() {
@@ -13083,7 +13125,7 @@ window.budgetAPI = (function() {
     }, 900);
   }
 
-  async function init() { await fetchBudgetLines(1); await fetchGLOptions(); await fetchProjects(); }
+  async function init() { if (typeof window.isTokenValid === 'function' && !window.isTokenValid()) return; await fetchBudgetLines(1); await fetchGLOptions(); await fetchProjects(); }
   init();
 
   function escapeHtml(str) {
@@ -13783,7 +13825,7 @@ body.theme-light .filter-select, body.theme-light .filter-input { background: #f
       updateOrgPageStats();
       updateDeptSummaryCards();
 
-      if (msgDiv) {
+      if (msgDiv && ORG_SUMMARY) {
         msgDiv.innerHTML = '✅ Organisation data loaded from StratRoom DB — ' + ORG_SUMMARY.total_members + ' members, ' + ORG_SUMMARY.total_users + ' user accounts';
         msgDiv.style.color = 'var(--green)';
         msgDiv.style.padding = '8px';
@@ -14115,6 +14157,7 @@ body.theme-light .filter-select, body.theme-light .filter-input { background: #f
       setTimeout(initOrg, 200);
       return;
     }
+    if (typeof window.isTokenValid === 'function' && !window.isTokenValid()) return; // no valid token — wait for login
     expandedNodes = {};
     const ok = await fetchOrgData();
     if (ok && ORG_DATA) {
@@ -14863,7 +14906,7 @@ body.theme-light .filter-select, body.theme-light .filter-input { background: #f
           <span>📋 Module Data (Standalone)</span>
           <div style="display:flex;gap:6px;">
             <button class="btn btn-ghost" style="font-size:10px;padding:3px 8px;" onclick="refreshStandaloneStats()">⟳ Refresh Stats</button>
-            <button class="btn btn-primary" style="font-size:10px;padding:3px 8px;" onclick="seedDemoData()">🌱 Seed Demo Data</button>
+
           </div>
         </div>
         <div id="standalone-module-stats">
@@ -16618,6 +16661,7 @@ async function apiGet(endpoint, params = {}) {
     const headers = { 'Content-Type': 'application/json' };
     if (API_TOKEN) headers['Authorization'] = `Bearer ${API_TOKEN}`;
     const response = await fetch(url, { method: 'GET', headers });
+    if (response.status === 401) { if (typeof window.handleSessionExpired === 'function') window.handleSessionExpired(); return null; }
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
     return await response.json();
   } catch (error) {
@@ -16779,6 +16823,8 @@ async function syncAllModules() {
 }
 
 async function refreshDashboardKPIs() {
+  if (typeof window.isTokenValid === 'function' && !window.isTokenValid()) return;
+  if (!API_TOKEN) return;
   const [riskData, kpiData, initiativesData, budgetData] = await Promise.all([
     apiGet(`/riskList/${CURRENT_EMP_ID}`),
     apiGet('/scoreCardList'),
@@ -16837,6 +16883,7 @@ if (window.navigate && !window._apiNavHooked) {
 
 document.addEventListener('DOMContentLoaded', () => {
   loadSavedSettings();
+  if (typeof window.isTokenValid === 'function' && !window.isTokenValid()) return; // no valid token — wait for login before firing data loads
   const activePanel = document.querySelector('.panel.active');
   if (activePanel?.id) loadModuleData(activePanel.id.replace('view-', ''));
   setTimeout(refreshDashboardKPIs, 500);
@@ -17305,7 +17352,7 @@ function saveAllAPIKeys() {
   apiKeys.ollama_endpoint = document.getElementById('sk-ollama-endpoint')?.value || 'http://localhost:11434';
   apiKeys.ollama_model = document.getElementById('sk-ollama-model')?.value || 'llama3.2';
   localStorage.setItem('stratroom_api_keys', JSON.stringify(apiKeys));
-  localStorage.setItem('selected_llm_provider', localStorage.getItem('selected_llm_provider') || 'ollama');
+  localStorage.setItem('selected_llm_provider', localStorage.getItem('selected_llm_provider') || 'openai');
   showProfileToast('API keys saved successfully!');
   const msg = document.getElementById('sk-save-msg');
   if (msg) {
@@ -17420,7 +17467,7 @@ async function fetchOllamaModels() {
 
 function getCurrentLLMConfig() {
   const sel = document.getElementById('llm-provider-select');
-  const provider = sel ? sel.value : (localStorage.getItem('selected_llm_provider') || 'ollama');
+  const provider = sel ? sel.value : (localStorage.getItem('selected_llm_provider') || 'openai');
   const keyMap = {
     anthropic: apiKeys.anthropic, openai: apiKeys.openai, google: apiKeys.google,
     xai: apiKeys.xai, deepseek: apiKeys.deepseek, moonshot: apiKeys.moonshot,
@@ -17429,7 +17476,7 @@ function getCurrentLLMConfig() {
   const modelDefaults = {
     anthropic: 'claude-sonnet-4-20250514', openai: 'gpt-4o-mini', google: 'gemini-2.0-flash',
     xai: 'grok-2', deepseek: 'deepseek-chat', moonshot: 'moonshot-v1-8k',
-    together: 'meta-llama/Llama-3-8b-chat-hf', mistral: 'mistral-small', ollama: apiKeys.ollama_model || 'llama3.2'
+    together: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', mistral: 'mistral-small', ollama: apiKeys.ollama_model || 'llama3.2'
   };
   return {
     provider: provider,
@@ -17452,7 +17499,7 @@ function saveSelectedProvider(provider) {
 }
 
 function initProviderSelector() {
-  const saved = localStorage.getItem('selected_llm_provider') || 'ollama';
+  const saved = localStorage.getItem('selected_llm_provider') || 'openai';
   const sel = document.getElementById('llm-provider-select');
   if (sel) sel.value = saved;
   const display = document.getElementById('current-llm-provider-display');
@@ -18291,7 +18338,7 @@ function runForecastDeepAnalysis() {
     var cfg = _getLLMConfig();
     if (cfg.apiKey || cfg.provider === 'ollama') {
       fetch('/agents/chat', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},
-        body:JSON.stringify({agent:'strategy',message:'Based on these ML model predictions, provide a deep strategic analysis with executive summary, key risks, and recommended actions:\n\n'+summary,provider:cfg.provider,api_key:cfg.apiKey,model:cfg.model,conversation_id:null,base_url:cfg.baseUrl})
+        body:JSON.stringify({agent:'strategy',message:'Based on these ML model predictions, provide a deep strategic analysis with executive summary, key risks, and recommended actions:\n\n'+summary,provider:cfg.provider,api_key:cfg.apiKey||'',model:cfg.model,conversation_id:null,base_url:cfg.baseUrl})
       }).then(function(r){return r.json();}).then(function(d){
         if (out) out.innerHTML = '<div style="white-space:pre-wrap;font-size:12px;line-height:1.7">' + (d.error ? 'Error: '+d.error : d.response) + '</div>';
       });
@@ -18335,7 +18382,7 @@ function sendForecastNewChat() {
     var cfg = _getLLMConfig();
     if (cfg.apiKey || cfg.provider === 'ollama') {
       fetch('/agents/chat', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},
-        body:JSON.stringify({agent:'strategy',message:msg+'\n\n[ML Data: '+mlContext+']',provider:cfg.provider,api_key:cfg.apiKey,model:cfg.model,conversation_id:null,base_url:cfg.baseUrl})
+        body:JSON.stringify({agent:'strategy',message:msg+'\n\n[ML Data: '+mlContext+']',provider:cfg.provider,api_key:cfg.apiKey||'',model:cfg.model,conversation_id:null,base_url:cfg.baseUrl})
       }).then(function(r){return r.json();}).then(function(d){
         ty.remove();
         var rd = document.createElement('div'); rd.className = 'smc-msg-bubble';
@@ -18950,7 +18997,7 @@ function runPredictiveDeepAnalysis() {
     var cfg = _getLLMConfig();
     if (cfg.apiKey || cfg.provider === 'ollama') {
       fetch('/agents/chat', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},
-        body:JSON.stringify({agent:'strategy',message:'Based on these ML model predictions, provide a deep executive analysis with key insights, correlations, and strategic recommendations:\n\n'+summary,provider:cfg.provider,api_key:cfg.apiKey,model:cfg.model,conversation_id:null,base_url:cfg.baseUrl})
+        body:JSON.stringify({agent:'strategy',message:'Based on these ML model predictions, provide a deep executive analysis with key insights, correlations, and strategic recommendations:\n\n'+summary,provider:cfg.provider,api_key:cfg.apiKey||'',model:cfg.model,conversation_id:null,base_url:cfg.baseUrl})
       }).then(function(r){return r.json();}).then(function(d){
         if (out) out.innerHTML = '<div style="white-space:pre-wrap;font-size:12px;line-height:1.7">' + (d.error ? 'Error: '+d.error : d.response) + '</div>';
       });
@@ -18993,7 +19040,7 @@ function sendPredictiveNewChat() {
     var cfg = _getLLMConfig();
     if (cfg.apiKey || cfg.provider === 'ollama') {
       fetch('/agents/chat', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},
-        body:JSON.stringify({agent:'strategy',message:msg+'\n\n[ML Model Data: '+mlContext+']',provider:cfg.provider,api_key:cfg.apiKey,model:cfg.model,conversation_id:null,base_url:cfg.baseUrl})
+        body:JSON.stringify({agent:'strategy',message:msg+'\n\n[ML Model Data: '+mlContext+']',provider:cfg.provider,api_key:cfg.apiKey||'',model:cfg.model,conversation_id:null,base_url:cfg.baseUrl})
       }).then(function(r){return r.json();}).then(function(d){
         ty.remove();
         var rd = document.createElement('div'); rd.className = 'smc-msg-bubble';
@@ -19654,26 +19701,7 @@ function sendModuleChatTo(moduleId, inputId, messagesId) {
         refreshStandaloneStats();
     };
 
-    window.seedDemoData = function() {
-        if (!confirm('Seed demo data for all modules? This will add sample data to your standalone storage.')) return;
-        localStorage.setItem(STORAGE_KEYS.risk, JSON.stringify([
-            { id: 'R001', name: 'Cyber Security Breach', owner: 'CISO', likelihood: 4, impact: 5, status: 'active', mitigation: 'MFA rollout' },
-            { id: 'R002', name: 'Supply Chain Disruption', owner: 'COO', likelihood: 3, impact: 4, status: 'active', mitigation: 'Dual sourcing' },
-            { id: 'R003', name: 'Regulatory Fine', owner: 'Legal', likelihood: 2, impact: 4, status: 'mitigated', mitigation: 'Compliance audit' }
-        ]));
-        localStorage.setItem(STORAGE_KEYS.scorecard, JSON.stringify([
-            { kpi: 'Revenue Growth', target: 85, actual: 82, owner: 'CFO', status: 'on-track' },
-            { kpi: 'Customer NPS', target: 75, actual: 74, owner: 'CCO', status: 'at-risk' },
-            { kpi: 'Talent Retention', target: 80, actual: 58, owner: 'CHRO', status: 'critical' }
-        ]));
-        localStorage.setItem(STORAGE_KEYS.projects, JSON.stringify([
-            { name: 'Digital Transformation', budget: 14200000, progress: 38, owner: 'CTO', status: 'off-track' },
-            { name: 'MEA Market Entry', budget: 8500000, progress: 22, owner: 'CCO', status: 'off-track' },
-            { name: 'Cybersecurity Uplift', budget: 4100000, progress: 61, owner: 'CISO', status: 'at-risk' }
-        ]));
-        standaloneShowToast('Demo data seeded successfully', 'success');
-        refreshStandaloneStats();
-    };
+
 
     window.saveStandaloneSettings = function() {
         var autosave = document.getElementById('standalone-autosave');
@@ -19794,7 +19822,7 @@ function sendModuleChatTo(moduleId, inputId, messagesId) {
 
 // ── FIX: Module Chat ──
 var _agentConversations = {};
-function _escHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function _escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 // ── Optimised chat: token budgets, caching, minimal context ──
 var _TOKEN_LIMITS={executive:180,manager:250,analyst:350,default:200};
 var _responseCache=new Map();
@@ -19845,7 +19873,7 @@ window.sendModuleChat=function(moduleId){
     cfg.baseUrl='http://host.docker.internal:11434';
     cfg.apiKey='';
     // Save as current config
-    try{localStorage.setItem('llm_provider','ollama');localStorage.setItem('ollama_endpoint','http://host.docker.internal:11434');localStorage.setItem('ollama_model','llama3.2');localStorage.setItem('selected_llm_provider','ollama');}catch(ex){}
+    try{localStorage.setItem('llm_provider','openai');localStorage.setItem('ollama_endpoint','http://host.docker.internal:11434');localStorage.setItem('ollama_model','llama3.2');localStorage.setItem('selected_llm_provider','openai');}catch(ex){}
   }
   if(!cfg.apiKey&&cfg.provider!=='ollama'){
     ty.remove();
@@ -19855,16 +19883,16 @@ window.sendModuleChat=function(moduleId){
     if(sendBtn){sendBtn.disabled=false;sendBtn.innerHTML='Send ↑';}
     return;
   }
-  var ac=new AbortController();var to=setTimeout(function(){ac.abort();},60000);
+  var ac=new AbortController();var to=setTimeout(function(){ac.abort();},45000);
   fetch('/agents/chat',{
     method:'POST',
     signal:ac.signal,
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},
-    body:JSON.stringify({agent:agentDomain,message:userMsg,provider:cfg.provider,api_key:cfg.apiKey,model:cfg.model,conversation_id:_agentConversations[agentDomain]||null,base_url:cfg.baseUrl})
+    body:JSON.stringify({agent:agentDomain,message:userMsg,provider:cfg.provider,api_key:cfg.apiKey||'',model:cfg.model,conversation_id:_agentConversations[agentDomain]||null,base_url:cfg.baseUrl})
   }).then(function(r){clearTimeout(to);return r.json();}).then(function(data){
     ty.remove();
     if(sendBtn){sendBtn.disabled=false;sendBtn.innerHTML='Send ↑';}
-    if(data.error||data.detail){var errDiv2=document.createElement('div');errDiv2.className='smc-msg-bubble';errDiv2.innerHTML='<div class="smc-avatar">SR</div><div class="smc-bubble-text" style="font-size:12px;color:var(--red)">'+_escHtml(data.error||data.detail)+'</div>';container.appendChild(errDiv2);container.scrollTop=container.scrollHeight;return;}
+    if(data.error||data.detail){var errDiv2=document.createElement('div');errDiv2.className='smc-msg-bubble';errDiv2.innerHTML='<div class="smc-avatar">SR</div><div class="smc-bubble-text" style="font-size:12px;color:var(--red)">'+_escHtml(data.error||(typeof data.detail==='string'?data.detail:JSON.stringify(data.detail)))+'</div>';container.appendChild(errDiv2);container.scrollTop=container.scrollHeight;return;}
     _agentConversations[agentDomain]=data.conversation_id;
     var rd=document.createElement('div');rd.className='smc-msg-bubble';
     rd.innerHTML='<div class="smc-avatar">SR</div><div class="smc-bubble-text" style="font-size:12px;line-height:1.5;white-space:pre-wrap">'+_escHtml(data.response||'')+'</div>';
@@ -19980,7 +20008,7 @@ function _moduleAgentRun(moduleId, prompt, btn, label) {
   authFetch('/agents/chat', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({agent: agentDomain, message: prompt, provider: cfg.provider, api_key: cfg.apiKey, model: cfg.model, conversation_id: _agentConversations[agentDomain] || null, base_url: cfg.baseUrl})
+    body: JSON.stringify({agent: agentDomain, message: prompt, provider: cfg.provider, api_key: cfg.apiKey || '', model: cfg.model, conversation_id: _agentConversations[agentDomain] || null, base_url: cfg.baseUrl})
   }).then(function(r){ return r.json(); }).then(function(data){
     ty.remove();
     if (btn) { btn.disabled = false; btn.textContent = '✅ ' + label; setTimeout(function(){ btn.textContent = origText; }, 3000); }
@@ -20253,7 +20281,7 @@ var _providerCfg={
   xai:{models:[{v:'grok-3',l:'Grok 3'},{v:'grok-2',l:'Grok 2'}],label:'xAI API Key',ph:'xai-…'},
   deepseek:{models:[{v:'deepseek-chat',l:'DeepSeek V3'},{v:'deepseek-reasoner',l:'DeepSeek R1'}],label:'DeepSeek API Key',ph:'sk-…'},
   moonshot:{models:[{v:'kimi-k2',l:'Kimi K2 (1M ctx)'},{v:'kimi-k2-turbo',l:'Kimi K2 Turbo'}],label:'Moonshot API Key',ph:'sk-…'},
-  together:{models:[{v:'meta-llama/Llama-3.3-70B',l:'Llama 3.3 70B'},{v:'Qwen/Qwen2.5-72B',l:'Qwen 2.5 72B'}],label:'Together API Key',ph:'together-…'},
+  together:{models:[{v:'meta-llama/Llama-3.3-70B-Instruct-Turbo',l:'Llama 3.3 70B'},{v:'Qwen/Qwen2.5-72B-Instruct',l:'Qwen 2.5 72B'}],label:'Together API Key',ph:'together-…'},
   mistral:{models:[{v:'mistral-large-2411',l:'Mistral Large 2'},{v:'mistral-small-2409',l:'Mistral Small'}],label:'Mistral API Key',ph:'…'},
   ollama:{models:[{v:'llama3.2',l:'Llama 3.2'},{v:'qwen2.5',l:'Qwen 2.5'},{v:'mistral',l:'Mistral'},{v:'phi3',l:'Phi-3'}],label:'Ollama Endpoint',ph:'http://localhost:11434'}
 };
@@ -20806,7 +20834,9 @@ if (document.readyState === 'loading') {
     const tok = getToken();
     if (tok) opts.headers['Authorization'] = 'Bearer ' + tok;
     opts.cache = 'no-store';
-    return fetch(url, opts);
+    const resp = await fetch(url, opts);
+    if (resp.status === 401 && typeof window.handleSessionExpired === 'function') window.handleSessionExpired();
+    return resp;
   }
   window.authFetch = authFetch;
 
@@ -20867,6 +20897,7 @@ if (document.readyState === 'loading') {
         setToken(data.access_token);
         localStorage.setItem('stratroom_token', data.access_token);
         localStorage.setItem('api-token', data.access_token);
+        if (typeof API_TOKEN !== 'undefined') window.API_TOKEN = data.access_token;
 
         // Fetch user profile
         try {
@@ -20906,6 +20937,7 @@ if (document.readyState === 'loading') {
     if (typeof saveUserProfile === 'function') saveUserProfile();
     if (typeof updateProfileUI === 'function') updateProfileUI();
     if (typeof applyRoleUI === 'function') applyRoleUI();
+    if (typeof window.RolePrompts !== 'undefined' && typeof window.RolePrompts.refreshPrompts === 'function') setTimeout(function(){ window.RolePrompts.refreshPrompts(); }, 300);
             }
           }
         } catch(e) {}
@@ -20922,6 +20954,8 @@ if (document.readyState === 'loading') {
           localStorage.setItem('stratroom_theme', 'dark');
         }
         if (typeof navigate === 'function') navigate('dashboard');
+        if (typeof refreshDashboardKPIs === 'function') setTimeout(refreshDashboardKPIs, 300);
+        if (typeof startAutoSync === 'function') startAutoSync();
         if (typeof injectBackButtons === 'function') injectBackButtons();
         return;
       } else {
@@ -20939,7 +20973,7 @@ if (document.readyState === 'loading') {
   };
 
   // ── 2. FIX API_BASE_URL ──
-  if (typeof API_BASE_URL !== 'undefined') { window.API_BASE_URL = ''; }
+  if (typeof API_BASE_URL !== 'undefined') { window.API_BASE_URL = '/stratroom'; }
   if (typeof API_TOKEN !== 'undefined' && !API_TOKEN) {
     const tok = getToken();
     if (tok) window.API_TOKEN = tok;
@@ -21054,7 +21088,7 @@ if (document.readyState === 'loading') {
       const resp = await authFetch(BACKEND + API.compliance);
       if (!resp.ok) return null;
       const data = await resp.json();
-      return data.frameworks || [];
+      return data.compliance || data.frameworks || [];
     } catch(e) { console.warn('Compliance load failed:', e.message); return null; }
   }
 
@@ -21144,14 +21178,39 @@ if (document.readyState === 'loading') {
 
   async function hydrateRiskPage() {
     const risks = await loadRisksFromBackend();
-    if (!risks || !risks.length) return false;
-
-    // Find the risk page IIFE's scope via the global riskData-like structure
-    // We need to re-render by directly manipulating the DOM
     const tbody = document.getElementById('risk-table-body');
     if (!tbody) return false;
+    if (!risks || !risks.length) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text3);font-size:13px">No active risks found</td></tr>';
+      const el = id => document.getElementById(id);
+      if (el('risk-count')) el('risk-count').innerText = '0';
+      if (el('kpi-critical')) el('kpi-critical').innerText = '0';
+      if (el('kpi-high')) el('kpi-high').innerText = '0';
+      if (el('kpi-avg-inherent')) el('kpi-avg-inherent').innerText = '0';
+      if (el('kpi-avg-residual')) el('kpi-avg-residual').innerText = '0';
+      if (el('kpi-resilience')) el('kpi-resilience').innerText = '0%';
+      return false;
+    }
 
-    const mapped = risks.map(mapBackendRiskToPage);
+    const ownerResp = await authFetch(BACKEND + API.orgUsers + '?_t=' + Date.now()).catch(() => null);
+    const ownerMap = {};
+    if (ownerResp && ownerResp.ok) {
+      const ownerData = await ownerResp.json().catch(() => ({}));
+      (ownerData.users || []).forEach(u => { ownerMap[u.user_id] = u.full_name || u.email || 'User ' + u.user_id; });
+    }
+    function resolveOwner(ownerId) {
+      if (!ownerId || ownerId === '—') return '—';
+      if (ownerMap[ownerId]) return ownerMap[ownerId];
+      const numId = parseInt(ownerId);
+      if (ownerMap[numId]) return ownerMap[numId];
+      return ownerId;
+    }
+
+    const mapped = risks.map(r => {
+      const m = mapBackendRiskToPage(r);
+      m.owner = resolveOwner(m.owner);
+      return m;
+    });
 
     function sc(h) { return h >= 20 ? 'sev-critical' : h >= 15 ? 'sev-high' : h >= 10 ? 'sev-medium' : 'sev-low'; }
     function sl(h) { return h >= 20 ? 'Critical' : h >= 15 ? 'High' : h >= 10 ? 'Medium' : 'Low'; }
@@ -21455,106 +21514,135 @@ if (document.readyState === 'loading') {
     const kpiCards = document.querySelectorAll('#view-dashboard .kpi-card');
     const roleLabels = { admin: 'Org Total', manager: 'Org Total', member: 'My Assigned' };
 
-    // ── Row 1: KPI Health ──
+    // ── Card 1: KPI Health (from scorecard_kpis) ──
     if (kpiCards[0]) {
       const v = kpiCards[0].querySelector('.kpi-value');
       const l = kpiCards[0].querySelector('.kpi-label');
-      if (v) v.textContent = stats.total_initiatives;
-      if (l) l.textContent = 'Total Initiatives';
+      const det = kpiCards[0].querySelector('.kpi-detail');
+      const oh = stats.kpi_health_on_track || 0;
+      const ar = stats.kpi_health_at_risk || 0;
+      const cr = stats.kpi_health_critical || 0;
+      const totalKPIs = oh + ar + cr;
+      if (v) v.innerHTML = oh + '<span style="font-size:14px;font-weight:500">/' + totalKPIs + '</span>';
+      if (l) l.textContent = '📊 KPI Health';
+      if (det) {
+        var perspectives = stats.kpi_health_perspectives || {};
+        var pNames = Object.keys(perspectives).slice(0, 3);
+        var detailParts = pNames.map(function(p) {
+          var pd = perspectives[p];
+          var pc = pd.on_track > pd.at_risk && pd.on_track > pd.critical ? 'var(--green)' :
+                   pd.critical > pd.at_risk ? 'var(--red)' : 'var(--amber)';
+          var icon = pc === 'var(--green)' ? '✓' : pc === 'var(--red)' ? '🔴' : '⚠️';
+          return '<span style="color:' + pc + '">' + icon + ' ' + p.split(' ')[0] + ': ' + Math.round(pd.on_track / (pd.total||1) * 100) + '%</span>';
+        });
+        det.innerHTML = detailParts.join(' · ');
+      }
       const d = kpiCards[0].querySelector('.kpi-delta');
-      if (d) d.innerHTML = '<span class="delta-up">↑ Active</span> · ' + roleLabels[role];
+      if (d) d.innerHTML = (oh > 0 ? '<span class="delta-up">↑ On Track</span>' : '') +
+        (cr > 0 ? ' · <span class="delta-down">' + cr + ' critical</span>' : '') +
+        (ar > 0 ? ' · ' + ar + ' at risk' : '') + ' · ' + roleLabels[role];
     }
-    // ── Row 1: Projects/Initiatives ──
+    // ── Card 2: Projects/Initiatives ──
     if (kpiCards[1]) {
       const v = kpiCards[1].querySelector('.kpi-value');
       const l = kpiCards[1].querySelector('.kpi-label');
       const det = kpiCards[1].querySelector('.kpi-detail');
-      if (v) v.textContent = stats.avg_progress + '%';
-      if (l) l.textContent = 'Avg Progress';
-      if (det) det.textContent = '$' + (stats.budget_planned / 1000000).toFixed(1) + 'M budget planned';
+      var offtrack = stats.projects_offtrack || 0;
+      var ontrack = stats.projects_ontrack || 0;
+      var total = stats.total_initiatives || 0;
+      var budgetM = ((stats.portfolio_budget || 0) / 1000000).toFixed(1);
+      if (v) v.innerHTML = offtrack + ' <span style="font-size:13px;color:var(--text3);font-weight:500">off-track</span>';
+      if (l) l.textContent = '🚀 Projects';
+      if (det) det.textContent = 'DT: ' + (total ? Math.round(ontrack/total*100) : 0) + '% · Active: ' + total;
       const d = kpiCards[1].querySelector('.kpi-delta');
-      if (d) d.textContent = '$' + (stats.budget_actual / 1000000).toFixed(1) + 'M actual · ' + roleLabels[role];
+      if (d) d.textContent = total + ' active · $' + budgetM + 'M portfolio';
     }
-    // ── Row 1: Risk Register ──
+    // ── Card 3: Risk Register (FIXED: uses proper heat-score breakdown) ──
     if (kpiCards[2]) {
       const v = kpiCards[2].querySelector('.kpi-value');
       const l = kpiCards[2].querySelector('.kpi-label');
       const det = kpiCards[2].querySelector('.kpi-detail');
       if (v) v.textContent = stats.total_risks;
-      if (l) l.textContent = '⚠ Total Risks';
-      const crit = stats.severity_breakdown?.P1 || 0;
-      const high = stats.high_risks || 0;
-      const med = stats.severity_breakdown?.P2 || 0;
+      if (l) l.textContent = '⚠ Risk Register';
+      var crit = stats.critical_risks || 0;
+      var high = stats.high_risks || 0;
+      var med = stats.medium_risks || 0;
       if (det) det.innerHTML = '<span style="color:var(--red)">🔴 ' + crit + ' critical</span> · <span style="color:var(--orange)">🟠 ' + high + ' high</span> · <span style="color:var(--amber)">🟡 ' + med + ' medium</span>';
       const d = kpiCards[2].querySelector('.kpi-delta');
-      if (d) d.innerHTML = '<span class="delta-down">' + crit + ' critical</span> · ' + roleLabels[role];
+      if (d) d.innerHTML = '<span class="delta-down">' + crit + ' critical</span> · Avg heat: ' + (stats.avg_inherent_heat || 0);
     }
-    // ── Row 1: Audit ──
+    // ── Card 4: Audit (FIXED: was showing incidents, now shows real audit data) ──
     if (kpiCards[3]) {
       const v = kpiCards[3].querySelector('.kpi-value');
       const l = kpiCards[3].querySelector('.kpi-label');
       const det = kpiCards[3].querySelector('.kpi-detail');
-      if (v) v.textContent = stats.p1_open;
-      if (l) l.textContent = '🔍 Open P1 Incidents';
-      if (det) det.textContent = stats.open_incidents + ' open incidents · MTTR tracked';
+      if (v) v.textContent = (stats.audit_completion_pct || 0) + '%';
+      if (l) l.textContent = '🔍 Audit';
+      if (det) det.textContent = stats.audit_open + ' findings · ' + stats.audit_total + ' total';
       const d = kpiCards[3].querySelector('.kpi-delta');
-      if (d) d.innerHTML = '<span class="delta-down">' + stats.open_incidents + ' open</span> · ' + roleLabels[role];
+      if (d) d.innerHTML = '<span class="delta-down">' + stats.audit_open + ' open</span> · ' + roleLabels[role];
     }
-    // ── Row 1: Compliance ──
+    // ── Card 5: Compliance (uses real compliance_pct) ──
     if (kpiCards[4]) {
       const v = kpiCards[4].querySelector('.kpi-value');
       const l = kpiCards[4].querySelector('.kpi-label');
-      if (v) v.textContent = (stats.compliance_score || 0) + '%';
+      const det = kpiCards[4].querySelector('.kpi-detail');
+      if (v) v.textContent = (stats.compliance_pct || 0) + '%';
       if (l) l.textContent = '⚖ Compliance';
+      var gaps = stats.compliance_gaps || 0;
+      if (det) det.textContent = stats.compliance_total + ' frameworks · ' + gaps + ' gaps';
       const d = kpiCards[4].querySelector('.kpi-delta');
-      if (d) d.innerHTML = '<span class="delta-up">✓</span> ' + roleLabels[role];
+      if (d) d.innerHTML = '<span class="delta-up">✓</span> ' + (gaps === 0 ? 'All passed' : gaps + ' gaps') + ' · ' + roleLabels[role];
     }
-    // ── Row 2: Tasks ──
+    // ── Card 6: Tasks (enriched with overdue + completion %) ──
     if (kpiCards[5]) {
       const v = kpiCards[5].querySelector('.kpi-value');
       const l = kpiCards[5].querySelector('.kpi-label');
+      const det = kpiCards[5].querySelector('.kpi-detail');
       if (v) v.textContent = stats.total_tasks;
-      if (l) l.textContent = role === 'member' ? '✅ My Tasks' : '✅ All Tasks';
+      if (l) l.textContent = role === 'member' ? '✅ My Tasks' : '✅ Tasks';
+      if (det) det.textContent = stats.overdue_tasks + ' overdue · ' + stats.task_completion_pct + '% done';
       const d = kpiCards[5].querySelector('.kpi-delta');
-      if (d) d.textContent = roleLabels[role] + ' · org total: ' + stats.total_initiatives;
+      if (d) d.innerHTML = '<span class="delta-down">' + stats.overdue_tasks + ' overdue</span> · ' + stats.total_tasks + ' total · ' + stats.task_completion_pct + '% done';
     }
-    // ── Row 2: Incidents ──
+    // ── Card 7: Incidents ──
     if (kpiCards[6]) {
       const v = kpiCards[6].querySelector('.kpi-value');
       const l = kpiCards[6].querySelector('.kpi-label');
       const d = kpiCards[6].querySelector('.kpi-delta');
       if (v) v.textContent = stats.open_incidents;
-      if (l) l.textContent = '🚨 Open Incidents';
-      if (d) d.textContent = stats.p1_open + ' P1 critical · ' + roleLabels[role];
+      if (l) l.textContent = '🚨 Incidents';
+      if (d) d.innerHTML = '<span class="delta-down">' + stats.p1_open + ' P1 critical</span> · ' + roleLabels[role];
     }
-    // ── Row 2: Budgets ──
+    // ── Card 8: Budgets ──
     if (kpiCards[7]) {
       const v = kpiCards[7].querySelector('.kpi-value');
       const l = kpiCards[7].querySelector('.kpi-label');
       const d = kpiCards[7].querySelector('.kpi-delta');
-      const variance = stats.budget_actual - stats.budget_planned;
-      const varianceM = (variance / 1000000).toFixed(1);
+      var variance = stats.budget_variance || 0;
+      var varianceM = (variance / 1000000).toFixed(1);
+      var plannedM = ((stats.budget_planned || 0) / 1000000).toFixed(1);
       if (v) v.textContent = (variance < 0 ? '-' : '') + '$' + Math.abs(varianceM) + 'M';
-      if (l) l.textContent = '💰 Budget Variance';
-      if (d) d.textContent = '$' + (stats.budget_planned / 1000000).toFixed(1) + 'M planned · ' + roleLabels[role];
+      if (l) l.textContent = '💰 Budgets';
+      if (d) d.textContent = '$' + plannedM + 'M FY · ' + (stats.budget_utilisation || 0) + '% utilised';
     }
-    // ── Row 2: Scorecards ──
+    // ── Card 9: Meetings (FIXED: was showing scorecards, now shows real meetings) ──
     if (kpiCards[8]) {
       const v = kpiCards[8].querySelector('.kpi-value');
       const l = kpiCards[8].querySelector('.kpi-label');
       const d = kpiCards[8].querySelector('.kpi-delta');
-      if (v) v.textContent = stats.total_scorecards;
-      if (l) l.textContent = '📊 Scorecards';
-      if (d) d.textContent = stats.avg_progress + '% avg progress · ' + roleLabels[role];
+      if (v) v.textContent = stats.total_meetings;
+      if (l) l.textContent = '📅 Meetings';
+      if (d) d.textContent = 'Scheduled · ' + roleLabels[role];
     }
-    // ── Row 2: Strategic Health ──
+    // ── Card 10: Strategic Health (FIXED: computed aggregate, not duplicate compliance) ──
     if (kpiCards[9]) {
       const v = kpiCards[9].querySelector('.kpi-value');
       const l = kpiCards[9].querySelector('.kpi-label');
       const d = kpiCards[9].querySelector('.kpi-delta');
-      if (v) v.textContent = (stats.compliance_score || 0) + '%';
+      if (v) v.textContent = (stats.strategic_health || 0) + '%';
       if (l) l.textContent = '⚡ Strategic Health';
-      if (d) d.textContent = stats.active_org_members + ' org members · ' + roleLabels[role];
+      if (d) d.innerHTML = '<span class="delta-up">▲ ' + (stats.risk_resilience || 0) + '%</span> resilience · ' + roleLabels[role];
     }
 
     return true;
@@ -21566,40 +21654,73 @@ if (document.readyState === 'loading') {
     if (!scorecards || !scorecards.length) return false;
     const grid = document.getElementById('scorecardGrid');
     if (!grid) return false;
-    const perspectiveMap = {};
-    scorecards.forEach(s => {
-      if (!perspectiveMap[s.perspective]) perspectiveMap[s.perspective] = { kpis: [], avg: 0 };
-      perspectiveMap[s.perspective].kpis.push(s);
+    function pct(a,t){ var aa=parseFloat(a)||0, tt=parseFloat(t)||0; return tt>0?Math.min(100,Math.round(aa/tt*100)):Math.min(100,aa); }
+    function itemColor(s){ var ls=(s||'').toLowerCase(); return ls==='on-track'||ls==='on track'?'var(--green)':ls==='at-risk'||ls==='at risk'?'var(--amber)':ls==='critical'?'var(--red)':'var(--text3)'; }
+    function itemArrow(s){ var ls=(s||'').toLowerCase(); return ls==='on-track'||ls==='on track'?'↑':ls==='at-risk'||ls==='at risk'?'→':ls==='critical'?'↓':'◆'; }
+    function scoreColor(sc){ return sc>=75?'var(--green)':sc>=50?'var(--amber)':'var(--red)'; }
+    function scoreLabel(sc){ return sc>=75?'↑ On Track':sc>=50?'→ At Risk':'↓ Critical'; }
+    var icons = { 'Financial':'💰', 'Customer':'👥', 'Internal Processes':'⚙️', 'Learning & Growth':'📚', 'ESG & Compliance':'🌿', 'Risk & Security':'⚠️' };
+    var accentColors = { 'Financial':'var(--green)','Customer':'var(--blue2)','Internal Processes':'var(--amber)','Learning & Growth':'var(--red)','ESG & Compliance':'var(--green)','Risk & Security':'var(--orange)','Default':'var(--blue2)' };
+    var dimColors = { 'Financial':'var(--green-dim)','Customer':'var(--blue-dim)','Internal Processes':'var(--amber-dim)','Learning & Growth':'var(--red-dim)','ESG & Compliance':'var(--green-dim)','Risk & Security':'var(--orange-dim)','Default':'var(--blue-dim)' };
+    var borderColors = { 'Financial':'var(--green-border)','Customer':'var(--blue-border)','Internal Processes':'var(--amber-border)','Learning & Growth':'var(--red-border)','ESG & Compliance':'var(--green-border)','Risk & Security':'var(--orange-border)','Default':'var(--blue-border)' };
+    var perspectiveMap = {};
+    scorecards.forEach(function(s) {
+      var p = s.perspective || 'General';
+      if (!perspectiveMap[p]) perspectiveMap[p] = [];
+      perspectiveMap[p].push(s);
     });
-    const icons = { 'Financial': '💰', 'Customer': '👥', 'Internal Processes': '⚙️', 'Learning & Growth': '📚', 'ESG & Compliance': '🌿', 'Risk & Security': '⚠️' };
-    const colors = { 'Financial': 'green', 'Customer': 'blue2', 'Internal Processes': 'amber', 'Learning & Growth': 'red', 'ESG & Compliance': 'green', 'Risk & Security': 'orange' };
-    const statusMap = { 'on-track': '↑ On Track', 'at-risk': '→ At Risk', 'critical': '↓ Critical' };
-    const MAX_DISPLAY = 6;
-    grid.innerHTML = Object.entries(perspectiveMap).map(([perspective, data]) => {
-      const avg = Math.round(data.kpis.reduce((s, k) => s + Math.min(k.actual || 0, 100), 0) / data.kpis.length);
-      const color = colors[perspective] || 'blue2';
-      const icon = icons[perspective] || '📊';
-      const worstStatus = data.kpis.some(k => k.status === 'critical') ? 'critical' : data.kpis.some(k => k.status === 'at-risk') ? 'at-risk' : 'on-track';
-      const displayKpis = data.kpis.slice(0, MAX_DISPLAY);
-      const remaining = data.kpis.length - MAX_DISPLAY;
-      return '<div class="sc-perspective-card" style="border:1px solid var(--border);border-radius:12px;background:var(--surface);padding:16px;">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
-          '<div style="font-size:24px;">' + icon + '</div>' +
-          '<div style="text-align:right;"><div style="font-size:28px;font-weight:800;color:var(--' + color + ');">' + avg + '%</div><div style="font-size:10px;color:var(--text3);">' + data.kpis.length + ' KPIs</div></div>' +
-        '</div>' +
-        '<div style="font-weight:700;font-size:13px;margin-bottom:8px;">' + perspective + '</div>' +
-        displayKpis.map(k => {
-          const val = Math.min(k.actual || 0, 100);
-          const barColor = k.status === 'critical' ? 'var(--red)' : k.status === 'at-risk' ? 'var(--amber)' : 'var(--green)';
-          return '<div style="margin-bottom:6px;">' +
-            '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:2px;"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%;">' + k.kpi_name + '</span><span style="font-weight:600;flex-shrink:0;">' + Math.min(k.actual || 0, 100) + '%</span></div>' +
-            '<div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;"><div style="height:100%;width:' + val + '%;background:' + barColor + ';border-radius:2px;"></div></div>' +
-          '</div>';
-        }).join('') +
-        (remaining > 0 ? '<div style="font-size:10px;color:var(--text3);margin-top:4px;">+ ' + remaining + ' more KPIs</div>' : '') +
-        '<div style="margin-top:8px;font-size:11px;color:var(--text3);">' + (statusMap[worstStatus] || '—') + '</div>' +
-      '</div>';
+    var order = ['Financial','Customer','Internal Processes','Learning & Growth','ESG & Compliance','Risk & Security','General'];
+    grid.innerHTML = order.map(function(p) {
+      var items = perspectiveMap[p];
+      if (!items || !items.length) return '';
+      var sumScore = items.reduce(function(s,k){ return s + pct(k.actual, k.target); }, 0);
+      var avgScore = items.length ? Math.round(sumScore / items.length) : 0;
+      var c = scoreColor(avgScore);
+      var lbl = scoreLabel(avgScore);
+      var icon = icons[p] || '📊';
+      var accent = accentColors[p] || accentColors.Default;
+      var dim = dimColors[p] || dimColors.Default;
+      var border = borderColors[p] || borderColors.Default;
+      var kpis = items.slice(0,4).map(function(k) {
+        var sc = pct(k.actual, k.target);
+        var nm = k.kpi_name || 'KPI';
+        return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%">'+nm+'</span><span style="color:'+itemColor(k.status)+';font-weight:600;font-size:11px">'+sc+'% '+itemArrow(k.status)+'</span></div>';
+      }).join('');
+      var pills = items.slice(0,4).map(function(k) {
+        var nm = (k.kpi_name || 'KPI').replace(/Scorecard/g,'').trim() || 'KPI';
+        return '<span style="font-size:8px;padding:2px 8px;background:'+dim+';color:'+itemColor(k.status)+';border-radius:99px;border:1px solid '+border+'">'+nm+'</span>';
+      }).join('');
+      return '<div class="sc-perspective-card" style="--card-accent:'+accent+'">'+
+        '<div style="height:4px;background:'+accent+';border-radius:var(--radius-card) var(--radius-card) 0 0"></div>'+
+        '<div style="padding:16px 18px 14px">'+
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'+
+            '<div style="display:flex;align-items:center;gap:9px">'+
+              '<div style="width:36px;height:36px;border-radius:10px;background:'+dim+';border:1px solid '+border+';display:flex;align-items:center;justify-content:center;font-size:18px">'+icon+'</div>'+
+              '<div>'+
+                '<div style="font-size:12px;font-weight:700;color:var(--text)">'+p+'</div>'+
+                '<div style="font-size:9px;color:var(--text3);font-family:\'DM Mono\',monospace">'+items.length+' Scorecards</div>'+
+              '</div>'+
+            '</div>'+
+            '<div style="text-align:right">'+
+              '<div style="font-size:26px;font-weight:800;color:'+c+';line-height:1">'+avgScore+'%</div>'+
+              '<div style="font-size:9px;color:'+c+'">'+lbl+'</div>'+
+            '</div>'+
+          '</div>'+
+          '<div style="height:6px;background:var(--surface);border-radius:99px;overflow:hidden;margin-bottom:12px"><div style="height:100%;width:'+Math.min(avgScore,100)+'%;background:'+c+';border-radius:99px;transition:width 1s ease-out"></div></div>'+
+          '<div style="display:flex;flex-direction:column;gap:3px;font-size:11px">'+kpis+'</div>'+
+          '<div style="margin-top:10px;display:flex;gap:5px;flex-wrap:wrap">'+pills+'</div>'+
+        '</div></div>';
     }).join('');
+    var kpiTable = document.getElementById('kpi-table');
+    if (kpiTable) {
+      var top10 = scorecards.slice(0,10).map(function(k) {
+        return {
+          kpiName: k.kpi_name || 'KPI',
+          kpiValue: { target: k.target, actual: k.actual, status: k.status || 'Pending' }
+        };
+      });
+      kpiTable.innerHTML = '<thead><tr><th style="text-align:left;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">KPI</th><th style="text-align:left;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">Target</th><th style="text-align:left;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">Actual</th><th style="text-align:left;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">Status</th></tr></thead><tbody>' + top10.map(function(kpi) { return '<tr><td style="padding:8px 14px;border-bottom:1px solid var(--border)"><strong>' + (kpi.kpiName) + '</strong></td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">' + (kpi.kpiValue.target ?? '—') + '</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">' + (kpi.kpiValue.actual ?? '—') + '</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)"><span class="tag ' + (kpi.kpiValue.status === 'on-track' || kpi.kpiValue.status === 'on track' ? 'tag-green' : 'tag-red') + '">' + kpi.kpiValue.status + '</span></td></tr>'; }).join('') + '</tbody>';
+    }
     window._scorecardHydrated = true;
     return true;
   }
@@ -21848,27 +21969,51 @@ if (document.readyState === 'loading') {
   // ── 5f. INJECT AUDIT DATA ──
   async function hydrateAuditPage() {
     const findings = await loadAuditFromBackend();
-    if (!findings || !findings.length) return false;
     const role = localStorage.getItem('user_role') || 'member';
     const canCreateAudit = (role === 'CEO' || role === 'admin' || role === 'Admin' || role === 'manager' || role === 'Manager');
-    const container = document.querySelector('#view-audit .card');
+    const container = document.getElementById('audit-findings-list');
     if (!container) return false;
+    const el = id => document.getElementById(id);
     function sevColor(s) { return s === 'Critical' ? 'var(--red)' : s === 'High' ? 'var(--amber)' : s === 'Medium' ? 'var(--blue2)' : 'var(--green)'; }
     function sevBg(s) { return s === 'Critical' ? 'var(--red-dim)' : s === 'High' ? 'var(--amber-dim)' : s === 'Medium' ? 'rgba(56,189,248,0.1)' : 'var(--green-dim)'; }
     function sevEmoji(s) { return s === 'Critical' ? '🔴' : s === 'High' ? '🟠' : s === 'Medium' ? '🟡' : '🟢'; }
-    const openCount = findings.filter(f => f.status === 'open').length;
-    container.innerHTML = '<div style="font-weight:700;font-size:15px;margin-bottom:12px;">🔍 Open Audit Findings (' + openCount + ')</div>' +
-      findings.map(f => {
-        const ubtn = canCreateAudit ? '<button class="btn btn-ghost" style="font-size:11px;" onclick="updateAuditFinding(' + f.id + ',\'' + (f.status||'') + '\')">Update</button>' : '';
-        return '<div style="display:flex;align-items:center;gap:12px;padding:10px;background:' + sevBg(f.severity) + ';border-radius:8px;margin-bottom:6px;">' +
-          '<span style="font-size:14px;">' + sevEmoji(f.severity) + '</span>' +
-          '<div style="flex:1;">' +
-            '<div style="font-size:12px;font-weight:600;">' + (f.title || '') + '</div>' +
-            '<div style="font-size:11px;color:var(--text3);">Assigned: ' + (f.owner || '—') + ' · Due: ' + (f.due_date || '—') + '</div>' +
-          '</div>' +
-          ubtn +
-        '</div>';
-      }).join('');
+    function formatDate(d) {
+      if (!d || d === '—' || d === '') return '—';
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return d;
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return dt.getDate() + ' ' + months[dt.getMonth()] + ' ' + dt.getFullYear();
+    }
+    if (!findings || !findings.length) {
+      container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">No audit findings found</div>';
+      if (el('audit-kpi-open')) el('audit-kpi-open').textContent = '0';
+      if (el('audit-kpi-readiness')) el('audit-kpi-readiness').textContent = '—';
+      if (el('audit-kpi-next')) el('audit-kpi-next').textContent = '—';
+      if (el('audit-kpi-cycles')) el('audit-kpi-cycles').textContent = '—';
+      const auditNewBtn = document.querySelector('#view-audit > div:first-child button.btn-primary');
+      if (auditNewBtn && !canCreateAudit) auditNewBtn.style.display = 'none';
+      return false;
+    }
+    const openCount = findings.filter(f => f.status === 'open' || f.status === 'in_progress').length;
+    const totalCount = findings.length;
+    const readinessScore = totalCount > 0 ? Math.round((1 - openCount / totalCount) * 100) : 0;
+    const nextAuditDate = findings.filter(f => f.due_date).sort((a, b) => new Date(a.due_date) - new Date(b.due_date))[0];
+    const nextAuditStr = nextAuditDate ? formatDate(nextAuditDate.due_date) : '—';
+    if (el('audit-kpi-open')) el('audit-kpi-open').textContent = openCount;
+    if (el('audit-kpi-readiness')) el('audit-kpi-readiness').textContent = readinessScore + '%';
+    if (el('audit-kpi-next')) el('audit-kpi-next').textContent = nextAuditStr;
+    if (el('audit-kpi-cycles')) el('audit-kpi-cycles').textContent = Math.max(1, Math.round(totalCount / 3));
+    container.innerHTML = findings.map(f => {
+      const ubtn = canCreateAudit ? '<button class="btn btn-ghost" style="font-size:11px;" onclick="updateAuditFinding(' + f.id + ',\'' + (f.status||'') + '\')">Update</button>' : '';
+      return '<div style="display:flex;align-items:center;gap:12px;padding:10px;background:' + sevBg(f.severity) + ';border-radius:8px;margin-bottom:6px;">' +
+        '<span style="font-size:14px;">' + sevEmoji(f.severity) + '</span>' +
+        '<div style="flex:1;">' +
+          '<div style="font-size:12px;font-weight:600;">' + (f.title || '') + '</div>' +
+          '<div style="font-size:11px;color:var(--text3);">Assigned: ' + (f.owner || '—') + ' · Due: ' + formatDate(f.due_date) + '</div>' +
+        '</div>' +
+        ubtn +
+      '</div>';
+    }).join('');
     const auditNewBtn = document.querySelector('#view-audit > div:first-child button.btn-primary');
     if (auditNewBtn) {
       if (!canCreateAudit) auditNewBtn.style.display = 'none';
@@ -21957,28 +22102,46 @@ if (document.readyState === 'loading') {
   // ── 5g. INJECT COMPLIANCE DATA ──
   async function hydrateCompliancePage() {
     const frameworks = await loadComplianceFromBackend();
-    if (!frameworks || !frameworks.length) return false;
     const role = localStorage.getItem('user_role') || 'member';
     const canCreateComp = (role === 'CEO' || role === 'admin' || role === 'Admin' || role === 'manager' || role === 'Manager');
     const compNewBtn = document.querySelector('#view-compliance > div:first-child button.btn-primary');
     if (compNewBtn && !canCreateComp) compNewBtn.style.display = 'none';
-    const container = document.querySelector('#view-compliance .card');
+    const container = document.getElementById('compliance-frameworks-list');
     if (!container) return false;
+    const el = id => document.getElementById(id);
     function fwColor(s) { return s === 'PASS' ? 'var(--green)' : s === 'GAP' ? 'var(--amber)' : 'var(--text3)'; }
     function fwEmoji(s) { return s === 'PASS' ? '✅' : s === 'GAP' ? '⚠️' : 'ℹ️'; }
     function fwBg(s) { return s === 'PASS' ? 'var(--green-dim)' : s === 'GAP' ? 'var(--amber-dim)' : 'var(--surface)'; }
     function fwBorder(s) { return s === 'PASS' ? 'var(--green-border)' : s === 'GAP' ? 'var(--amber-border)' : 'var(--border)'; }
-    container.innerHTML = '<div style="font-weight:700;font-size:15px;margin-bottom:12px;">⚖ Compliance Frameworks</div>' +
-      frameworks.map(f =>
-        '<div style="display:flex;align-items:center;gap:12px;padding:10px;background:' + fwBg(f.status) + ';border-radius:8px;border:1px solid ' + fwBorder(f.status) + ';margin-bottom:6px;">' +
-          '<span style="font-size:16px;">' + fwEmoji(f.status) + '</span>' +
-          '<div style="flex:1;">' +
-            '<div style="font-size:12px;font-weight:600;">' + (f.name || '') + '</div>' +
-            '<div style="font-size:11px;color:var(--text3);">' + (f.description || '') + '</div>' +
-          '</div>' +
-          '<span style="color:' + fwColor(f.status) + ';font-size:11px;font-weight:600;">' + (f.status || '') + ' ' + (f.score || 0) + '%</span>' +
-        '</div>'
-      ).join('');
+    if (!frameworks || !frameworks.length) {
+      container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">No compliance frameworks found</div>';
+      if (el('comp-kpi-score')) el('comp-kpi-score').textContent = '—';
+      if (el('comp-kpi-gaps')) el('comp-kpi-gaps').textContent = '—';
+      if (el('comp-kpi-next')) el('comp-kpi-next').textContent = '—';
+      return false;
+    }
+    const avgScore = Math.round(frameworks.reduce((s, f) => s + parseFloat(f.score || 0), 0) / frameworks.length);
+    const gapCount = frameworks.filter(f => (f.status || '').toUpperCase() === 'GAP' || (f.status || '').toUpperCase() === 'FAIL').length;
+    const nextAuditItems = frameworks.filter(f => f.next_audit || f.due_date).sort((a, b) => {
+      const da = new Date(a.next_audit || a.due_date);
+      const db = new Date(b.next_audit || b.due_date);
+      return da - db;
+    });
+    const nextAuditStr = nextAuditItems.length > 0 ? (nextAuditItems[0].next_audit || nextAuditItems[0].due_date) : '—';
+    if (el('comp-kpi-score')) el('comp-kpi-score').textContent = avgScore + '%';
+    if (el('comp-kpi-gaps')) el('comp-kpi-gaps').textContent = gapCount;
+    if (el('comp-kpi-next')) el('comp-kpi-next').textContent = nextAuditStr;
+    container.innerHTML = frameworks.slice(0, 20).map(f => {
+      const status = (f.status || '').toUpperCase();
+      return '<div style="display:flex;align-items:center;gap:12px;padding:10px;background:' + fwBg(status) + ';border-radius:8px;border:1px solid ' + fwBorder(status) + ';margin-bottom:6px;">' +
+        '<span style="font-size:16px;">' + fwEmoji(status) + '</span>' +
+        '<div style="flex:1;">' +
+          '<div style="font-size:12px;font-weight:600;">' + (f.name || '') + '</div>' +
+          '<div style="font-size:11px;color:var(--text3);">' + (f.description || '') + '</div>' +
+        '</div>' +
+        '<span style="color:' + fwColor(status) + ';font-size:11px;font-weight:600;">' + (f.status || '') + ' ' + (f.score || 0) + '%</span>' +
+      '</div>';
+    }).join('');
     return true;
   }
 
@@ -22121,6 +22284,16 @@ if (document.readyState === 'loading') {
         '<td style="padding:10px 12px"><span style="background:var(--' + sc + '-dim);color:var(--' + sc + ');border-radius:6px;font-size:10px;padding:3px 8px;font-weight:600">' + (statusLabels[p.status] || p.status) + '</span></td>' +
       '</tr>';
     }).join('');
+    const el = id => document.getElementById(id);
+    const onTrack = projects.filter(p => p.status === 'on_track').length;
+    const atRisk = projects.filter(p => p.status === 'at_risk').length;
+    const offTrack = projects.filter(p => p.status === 'off_track' || p.status === 'off-track').length;
+    const totalBudget = projects.reduce((s, p) => s + parseFloat((p.budget || '').replace(/[^0-9.]/g, '') || 0), 0);
+    if (el('proj-kpi-active')) el('proj-kpi-active').textContent = projects.length;
+    if (el('proj-kpi-ontrack')) el('proj-kpi-ontrack').textContent = onTrack;
+    if (el('proj-kpi-atrisk')) el('proj-kpi-atrisk').textContent = atRisk;
+    if (el('proj-kpi-offtrack')) el('proj-kpi-offtrack').textContent = offTrack;
+    if (el('proj-kpi-budget')) el('proj-kpi-budget').textContent = '$' + (totalBudget / 1000000).toFixed(1) + 'M';
     return true;
   }
 
@@ -22150,7 +22323,7 @@ if (document.readyState === 'loading') {
     const risks = data.risks?.risks || [];
     const incidents = data.incidents?.incidents || [];
     const scorecards = data.scorecards?.items || [];
-    const compliance = data.compliance?.frameworks || [];
+    const compliance = data.compliance?.compliance || [];
     const audit = data.audit?.findings || [];
     const tasksData = data.tasks?.tasks || [];
     const meetings = data.meetings?.meetings || [];
@@ -22225,7 +22398,7 @@ if (document.readyState === 'loading') {
     const tasksData = data.tasks?.tasks || [];
     const meetings = data.meetings?.meetings || [];
     const projects = data.projects?.projects || [];
-    const compliance = data.compliance?.frameworks || [];
+    const compliance = data.compliance?.compliance || [];
     const audit = data.audit?.findings || [];
     const panel = document.getElementById('view-snapshots');
     if (!panel) return false;
@@ -22261,7 +22434,7 @@ if (document.readyState === 'loading') {
     if (!data) return false;
     const risks = data.risks?.risks || [];
     const projects = data.projects?.projects || [];
-    const compliance = data.compliance?.frameworks || [];
+    const compliance = data.compliance?.compliance || [];
     const onTrack = projects.filter(p => p.status === 'on_track').length;
     const avgProgress = projects.length ? Math.round(projects.reduce((s, p) => s + (p.progress || 0), 0) / projects.length) : 0;
     const avgScore = compliance.length ? Math.round(compliance.reduce((s, f) => s + (f.score || 0), 0) / compliance.length) : 0;
@@ -22292,10 +22465,22 @@ if (document.readyState === 'loading') {
         new Promise(function(resolve) { setTimeout(function() { console.warn('[AgentDashboard] Module data fetch timed out'); resolve(null); }, 15000); })
       ]);
       
-      // Wait for status first (it's fast and critical for card updates)
+      // Wait for status first — this is fast
       statusData = await statusPromise;
       
-      // Fetch module data in the background (cards will update in Phase 2)
+      // Update cards immediately with status data — don't block on module data
+      if (statusData && statusData.agents) {
+        for (var i = 0; i < _agentMeta.length; i++) {
+          try {
+            updateAgentCard(_agentMeta[i], statusData.agents[_agentMeta[i].domain] || {});
+          } catch(cardErr) {
+            _agentLog('error', 'Failed to update card for ' + _agentMeta[i].domain, cardErr.message);
+          }
+        }
+        renderDashboardSidebar(statusData);
+      }
+      
+      // Now fetch module data in the background
       moduleData = await modulePromise;
     } catch(e) {
       console.warn('[AgentDashboard] Concurrent fetch failed:', e.message);
@@ -22380,7 +22565,7 @@ return true;
     const risks = data.risks?.risks || [];
     const incidents = data.incidents?.incidents || [];
     const projects = data.projects?.projects || [];
-    const compliance = data.compliance?.frameworks || [];
+    const compliance = data.compliance?.compliance || [];
     const audit = data.audit?.findings || [];
     const tasksData = data.tasks?.tasks || [];
     const panel = document.getElementById('view-decision-intel');
@@ -23156,7 +23341,7 @@ return true;
     var providerModels = {
       ollama: 'llama3.2', openai: 'gpt-4o-mini', anthropic: 'claude-sonnet-4-20250514',
       google: 'gemini-2.0-flash', deepseek: 'deepseek-chat', xai: 'grok-2',
-      moonshot: 'moonshot-v1-8k', together: 'meta-llama/Llama-3-8b-chat-hf', mistral: 'mistral-small'
+      moonshot: 'moonshot-v1-8k', together: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', mistral: 'mistral-small'
     };
     function buildProviderSelect(selectedProvider, selectId) {
       var h = '';

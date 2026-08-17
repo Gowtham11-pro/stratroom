@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from datetime import datetime
@@ -13,12 +14,13 @@ from app.core.deps import require_role
 from app.core.config import settings
 from app.agents.base import AgentRunner
 from app.agents.prompts import AGENT_PROMPTS
-from app.agents.task_tools import query_user_tasks, update_task_progress
+from app.agents.task_tools import query_user_tasks, update_task_status
+from app.ai.tokens import token_benchmark, sanitize_input, valid_input_chars
 from app.services.java_bridge import bridge
 
 AGENT_DOMAINS = [
     "strategy", "risk", "finance", "compliance", "audit",
-    "task", "meetings", "projects", "incident",
+    "task", "meetings", "projects", "incident", "decision",
 ]
 
 logger = logging.getLogger("stratroom.agents")
@@ -48,6 +50,12 @@ class AgentChatRequest(BaseModel):
     def validate_message(cls, v: str) -> str:
         if not v.strip():
             raise ValueError("Message cannot be empty")
+        if not valid_input_chars(v):
+            raise ValueError("Message contains disallowed control characters")
+        if len(v) > settings.MAX_CHAT_INPUT_CHARS:
+            raise ValueError(
+                f"Message exceeds maximum length of {settings.MAX_CHAT_INPUT_CHARS} characters"
+            )
         if len(v) > settings.MAX_PROMPT_LENGTH:
             raise ValueError(f"Message exceeds maximum length of {settings.MAX_PROMPT_LENGTH}")
         return v
@@ -56,7 +64,7 @@ class AgentChatRequest(BaseModel):
     @classmethod
     def validate_provider(cls, v: str) -> str:
         v = v.strip().lower()
-        if v not in settings.ALLOWED_PROVIDERS:
+        if v and v not in settings.ALLOWED_PROVIDERS:
             raise ValueError(f"Unsupported provider: {v}. Allowed: {', '.join(sorted(settings.ALLOWED_PROVIDERS))}")
         return v
 
@@ -64,8 +72,6 @@ class AgentChatRequest(BaseModel):
     @classmethod
     def validate_model(cls, v: str) -> str:
         v = v.strip()
-        if not v:
-            raise ValueError("Model name is required")
         if len(v) > 200:
             raise ValueError("Model name too long")
         return v
@@ -81,6 +87,35 @@ async def agent_chat(
     org_id = ctx["org_id"]
     is_admin = ctx["is_admin"]
 
+    # ── Provider resolution ────────────────────────────────────────────
+    # If the request carries its own api_key or a custom endpoint, honor it
+    # fully. Otherwise fall back to the server-side default (AI_PROVIDER /
+    # AI_API_KEY / AI_MODEL) so the chat works without per-user setup.
+    if req.api_key or req.base_url:
+        provider = (req.provider or settings.AI_DEFAULT_PROVIDER).lower()
+        model = req.model or settings.AI_DEFAULT_MODEL
+        api_key = req.api_key or settings.AI_DEFAULT_API_KEY
+    else:
+        provider = (settings.AI_DEFAULT_PROVIDER or req.provider).lower()
+        model = settings.AI_DEFAULT_MODEL or req.model
+        api_key = settings.AI_DEFAULT_API_KEY or req.api_key
+
+    if not provider or provider not in settings.ALLOWED_PROVIDERS:
+        raise HTTPException(
+            status_code=422,
+            detail="No usable AI provider. Provide a provider/api_key in the request or configure AI_PROVIDER on the server.",
+        )
+    if not model:
+        raise HTTPException(
+            status_code=422,
+            detail="No usable AI model. Provide a model in the request or configure AI_MODEL on the server.",
+        )
+    if not api_key and provider not in ("ollama", "mock"):
+        raise HTTPException(
+            status_code=422,
+            detail="No API key provided. Set one in the UI or configure AI_API_KEY on the server.",
+        )
+
     runner = AgentRunner(req.agent)
     try:
         if req.conversation_id:
@@ -94,9 +129,9 @@ async def agent_chat(
         result = await runner.run(
             db=db,
             user_message=req.message,
-            provider=req.provider,
-            api_key=req.api_key,
-            model=req.model,
+            provider=provider,
+            api_key=api_key,
+            model=model,
             user_id=user_id,
             org_id=org_id,
             conversation_id=req.conversation_id,
@@ -114,11 +149,35 @@ async def agent_chat(
         raise HTTPException(status_code=502, detail="Agent request failed. Please try again later.")
 
 
+@router.get("/benchmark")
+async def agent_token_benchmark(ctx: dict = Depends(require_role("member"))):
+    """In-memory token benchmark — average tokens consumed per response.
+
+    Returns the aggregate estimate plus the rolling recent window. This is a
+    monitoring aid for operators reviewing token consumption; it does not
+    disclose raw user messages.
+    """
+    return {"averages": token_benchmark.snapshot(), "recent": token_benchmark.recent()}
+
+
+@router.get("/effective-config")
+async def effective_agent_config(ctx: dict = Depends(require_role("member"))):
+    """Return the server-side default AI provider/model so the UI can show the
+    real provider badge (e.g. TOGETHER) instead of hardcoded marketing text.
+    """
+    return {
+        "provider": settings.AI_DEFAULT_PROVIDER or "",
+        "model": settings.AI_DEFAULT_MODEL or "",
+        "key_configured": bool(settings.AI_DEFAULT_API_KEY),
+    }
+
+
 class TaskActionRequest(BaseModel):
-    action: str  # 'query' or 'update'
+    action: str  # 'query', 'update', or 'update_progress'
     task_id: Optional[int] = None
     status: Optional[str] = None
     priority: Optional[str] = None
+    progress: Optional[int] = None
 
 
 @router.post("/task-action")
@@ -146,7 +205,7 @@ async def task_action(
         elif req.action == "update":
             if not req.task_id:
                 raise HTTPException(status_code=422, detail="task_id is required for update action")
-            result = await update_task_progress(
+            result = await update_task_status(
                 db, user_id, org_id, req.task_id, req.status, is_admin,
                 email=ctx.get("email"),
             )
@@ -154,14 +213,78 @@ async def task_action(
                 raise HTTPException(status_code=404, detail=result["error"])
             return result
 
+        elif req.action == "update_progress":
+            if not req.task_id:
+                raise HTTPException(status_code=422, detail="task_id is required for update_progress action")
+            from app.agents.task_tools import update_task_progress
+            result = await update_task_progress(
+                db, user_id, org_id, req.task_id, req.progress, is_admin,
+                email=ctx.get("email"),
+            )
+            if "error" in result:
+                raise HTTPException(status_code=404, detail=result["error"])
+            return result
+
         else:
-            raise HTTPException(status_code=422, detail=f"Unknown action: {req.action}. Use 'query' or 'update'.")
+            raise HTTPException(status_code=422, detail=f"Unknown action: {req.action}. Use 'query', 'update', or 'update_progress'.")
 
     except HTTPException:
         raise
     except Exception as exc:
         logger.exception("Task action failed [user=%s action=%s]", user_id, req.action)
         raise HTTPException(status_code=500, detail="Task action failed. Please try again later.")
+
+
+class InitiativeActionRequest(BaseModel):
+    action: str  # 'query' or 'update_progress'
+    initiative_id: Optional[int] = None
+    progress: Optional[int] = None
+
+
+@router.post("/initiative-action")
+async def initiative_action(
+    req: InitiativeActionRequest,
+    db: AsyncSession = Depends(get_db),
+    ctx: dict = Depends(require_role("member")),
+):
+    """Direct initiative management tool — executes without LLM round-trip."""
+    from app.agents.initiative_tools import query_initiatives, update_initiative_progress
+
+    user_id = ctx["user_id"]
+    org_id = ctx["org_id"]
+    is_admin = ctx["is_admin"]
+    email = ctx.get("email")
+
+    try:
+        if req.action == "query":
+            return await query_initiatives(
+                db, user_id, org_id,
+                is_admin=is_admin,
+                email=email,
+            )
+
+        elif req.action == "update_progress":
+            if not req.initiative_id:
+                raise HTTPException(status_code=422, detail="initiative_id is required for update_progress action")
+            result = await update_initiative_progress(
+                db, user_id, org_id,
+                initiative_id=req.initiative_id,
+                progress=req.progress,
+                is_admin=is_admin,
+                email=email,
+            )
+            if "error" in result:
+                raise HTTPException(status_code=404, detail=result["error"])
+            return result
+
+        else:
+            raise HTTPException(status_code=422, detail=f"Unknown action: {req.action}. Use 'query' or 'update_progress'.")
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Initiative action failed [user=%s action=%s]", user_id, req.action)
+        raise HTTPException(status_code=500, detail="Initiative action failed. Please try again later.")
 
 
 @router.get("/conversations")
@@ -477,3 +600,51 @@ async def get_agent_metrics(
         logger.warning("Failed to count conversations for agent=%s", agent_name)
 
     return metrics
+
+
+@router.get("/intelligence/context")
+async def get_decision_intelligence_context(
+    ctx: dict = Depends(require_role("member")),
+):
+    """Consolidate contextual data across PESTEL, SWOT, Risks, Initiatives, and Decisions
+
+    for the AI Decision Intelligence Layer.
+    """
+    emp_id = ctx["user_id"]
+    try:
+        pestel_data, swot_data, risk_data, init_data, decision_data = await asyncio.gather(
+            bridge.get(bridge.db_service, "/pestelList"),
+            bridge.get(bridge.db_service, "/swotList"),
+            bridge._mysql("SELECT ID, risk_value, owner, status, page_name FROM risk_details WHERE active = 1"),
+            bridge.get(bridge.db_service, "/initiativesList/"),
+            bridge.get(bridge.db_service, "/decisions"),
+        )
+    except Exception as exc:
+        logger.warning("Intelligence context gather warning: %s", exc)
+        pestel_data, swot_data, risk_data, init_data, decision_data = [], [], [], [], []
+
+    pestels = pestel_data if isinstance(pestel_data, list) else (pestel_data.get("items", []) if isinstance(pestel_data, dict) else [])
+    swots = swot_data if isinstance(swot_data, list) else (swot_data.get("items", []) if isinstance(swot_data, dict) else [])
+    inits = init_data if isinstance(init_data, list) else (init_data.get("initiatives", []) if isinstance(init_data, dict) else [])
+    decisions = decision_data if isinstance(decision_data, list) else (decision_data.get("decisions", []) if isinstance(decision_data, dict) else [])
+
+    risks_parsed = []
+    for r in (risk_data or []):
+        rv = bridge._parse_json_col(r, "risk_value")
+        risks_parsed.append({
+            "id": r.get("ID"),
+            "name": rv.get("name") or rv.get("title", ""),
+            "score": rv.get("score") or 0,
+            "owner": r.get("owner"),
+            "page_name": r.get("page_name"),
+        })
+
+    return {
+        "pestel": pestels,
+        "swot": swots,
+        "risks": risks_parsed,
+        "initiatives": inits,
+        "decisions": decisions,
+        "timestamp": datetime.now().isoformat(),
+    }
+

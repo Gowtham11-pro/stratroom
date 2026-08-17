@@ -1,8 +1,10 @@
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends
 
 from app.core.deps import require_role
+from app.core.rbac import filter_visible_rows
 from app.services.java_bridge import bridge
 
 logger = logging.getLogger("stratroom.dashboard")
@@ -31,6 +33,122 @@ def _get_json_val(d: dict, *keys, default=0):
         return default
 
 
+# ── Async data-fetch helpers (for asyncio.gather parallelization) ──
+
+async def _fetch_risks(emp_id=None):
+    try:
+        if emp_id is not None:
+            return await bridge._mysql(
+                "SELECT ID, risk_value, owner, status FROM risk_details "
+                "WHERE active = 1 AND owner = %s",
+                (emp_id,),
+            )
+        return await bridge._mysql(
+            "SELECT ID, risk_value, owner, status FROM risk_details WHERE active = 1"
+        )
+    except Exception:
+        logger.warning("Dashboard: failed to fetch risks")
+        return []
+
+
+async def _fetch_scorecards(org_id):
+    try:
+        return await bridge._mysql(
+            "SELECT id, org_id, perspective, kpi_name, target, actual, status "
+            "FROM scorecard_kpis WHERE org_id = %s",
+            (org_id or 1,),
+        )
+    except Exception:
+        logger.warning("Dashboard: failed to fetch scorecards")
+        return []
+
+
+async def _fetch_incidents():
+    try:
+        rows = await bridge.get(bridge.db_service, "/universalIncidentList")
+        return rows if isinstance(rows, list) else []
+    except Exception:
+        logger.warning("Dashboard: failed to fetch incidents")
+        return []
+
+
+async def _fetch_audit():
+    try:
+        rows = await bridge.get(bridge.db_service, "/auditManagementList")
+        return rows if isinstance(rows, list) else []
+    except Exception:
+        logger.warning("Dashboard: failed to fetch audit")
+        return []
+
+
+async def _fetch_compliance():
+    try:
+        rows = await bridge.get(bridge.db_service, "/compliance")
+        return rows if isinstance(rows, list) else []
+    except Exception:
+        logger.warning("Dashboard: failed to fetch compliance")
+        return []
+
+
+async def _fetch_tasks(emp_id):
+    try:
+        if emp_id is not None:
+            return await bridge._mysql(
+                "SELECT ID, task_value, owner, priority, status FROM task_details "
+                "WHERE owner = %s "
+                "ORDER BY FIELD(priority, 'Critical', 'High', 'Medium', 'Low'), ID",
+                (emp_id,),
+            )
+        rows = await bridge.get(bridge.db_service, f"/retrieveTaskList/{emp_id}")
+        return rows if isinstance(rows, list) else []
+    except Exception:
+        logger.warning("Dashboard: failed to fetch tasks")
+        return []
+
+
+async def _fetch_budgets():
+    try:
+        rows = await bridge.get(bridge.db_service, "/budgetsListview")
+        return rows if isinstance(rows, list) else []
+    except Exception:
+        logger.warning("Dashboard: failed to fetch budgets")
+        return []
+
+
+async def _fetch_meetings():
+    try:
+        rows = await bridge.get(bridge.db_service, "/meetingManagementList/")
+        return rows if isinstance(rows, list) else []
+    except Exception:
+        logger.warning("Dashboard: failed to fetch meetings")
+        return []
+
+
+async def _fetch_initiatives(emp_id=None):
+    try:
+        rows = await bridge.get(bridge.db_service, "/initiativesList/")
+        if not isinstance(rows, list):
+            return []
+        if emp_id is not None:
+            rows = [r for r in rows if str(r.get("owner") or "") == str(emp_id)]
+        return rows
+    except Exception:
+        logger.warning("Dashboard: failed to fetch initiatives")
+        return []
+
+
+async def _fetch_active_emp_count():
+    try:
+        row = await bridge._mysql(
+            "SELECT COUNT(*) as cnt FROM employee_details WHERE status = 'Active'",
+            one=True,
+        )
+        return row["cnt"] if row else 0
+    except Exception:
+        logger.warning("Dashboard: failed to fetch employee count")
+        return 0
+
+
 @router.get("/stats")
 async def get_stats(ctx: dict = Depends(require_role("member"))):
     emp_id = ctx["user_id"]
@@ -47,11 +165,39 @@ async def get_stats(ctx: dict = Depends(require_role("member"))):
         )
         mysql_user = rows[0] if rows else None
     mysql_org_id = mysql_user["org_id"] if mysql_user else 0
+    mysql_emp_id = mysql_user["emp_id"] if mysql_user else None
+
+    # ── Parallel data fetch (replaces 10+ sequential calls) ──
+    (
+        risk_rows,
+        scorecard_rows,
+        inc_list,
+        audit_list,
+        comp_list,
+        task_list,
+        budget_list,
+        meeting_list,
+        init_list,
+        active_org_members,
+    ) = await asyncio.gather(
+        _fetch_risks(mysql_emp_id),
+        _fetch_scorecards(mysql_org_id),
+        _fetch_incidents(),
+        _fetch_audit(),
+        _fetch_compliance(),
+        _fetch_tasks(mysql_emp_id),
+        _fetch_budgets(),
+        _fetch_meetings(),
+        _fetch_initiatives(mysql_emp_id),
+        _fetch_active_emp_count(),
+    )
+
+    # ── RBAC filtering: scope data to caller's visibility ──
+    risk_rows = await filter_visible_rows(ctx, risk_rows)
+    task_list = await filter_visible_rows(ctx, task_list)
+    init_list = await filter_visible_rows(ctx, init_list)
 
     # ── 1. RISKS → Card 3 ──
-    risk_rows = await bridge._mysql(
-        "SELECT ID, risk_value, owner, status FROM risk_details WHERE active = 1"
-    )
     total_risks = len(risk_rows)
     critical_risks = high_risks = medium_risks = low_risks = 0
     heat_scores = []
@@ -70,13 +216,7 @@ async def get_stats(ctx: dict = Depends(require_role("member"))):
     avg_inherent = round(sum(heat_scores) / len(heat_scores), 1) if heat_scores else 0
 
     # ── 2. SCORECARDS / KPI HEALTH → Card 1 ──
-    scorecard_rows = await bridge._mysql(
-        "SELECT id, org_id, perspective, kpi_name, target, actual, status "
-        "FROM scorecard_kpis WHERE org_id = %s",
-        (mysql_org_id or 1,),
-    )
     total_scorecards = len(scorecard_rows)
-    # Group by perspective
     perspective_data = {}
     for s in scorecard_rows:
         p = s.get("perspective", "General")
@@ -92,8 +232,6 @@ async def get_stats(ctx: dict = Depends(require_role("member"))):
             perspective_data[p]["critical"] += 1
 
     # ── 3. INCIDENTS → Card 7 ──
-    incident_rows = await bridge.get(bridge.db_service, "/universalIncidentList") or []
-    inc_list = incident_rows if isinstance(incident_rows, list) else []
     total_incidents = len(inc_list)
     open_incidents = sum(1 for i in inc_list if (i.get("status") or "").lower() != "resolved")
     p1_open = sum(
@@ -106,9 +244,7 @@ async def get_stats(ctx: dict = Depends(require_role("member"))):
         sev = i.get("severity") or "Unknown"
         severity_map[sev] = severity_map.get(sev, 0) + 1
 
-    # ── 4. AUDIT → Card 4 (FIXED: was showing incidents) ──
-    audit_rows = await bridge.get(bridge.db_service, "/auditManagementList") or []
-    audit_list = audit_rows if isinstance(audit_rows, list) else []
+    # ── 4. AUDIT → Card 4 ──
     total_audit = len(audit_list)
     open_audit = sum(1 for a in audit_list if (a.get("status") or "").lower() in ("open", "in_progress"))
     audit_with_rating = [a for a in audit_list if a.get("rating")]
@@ -119,14 +255,11 @@ async def get_stats(ctx: dict = Depends(require_role("member"))):
     audit_completion_pct = round(low_medium_audits / total_audit * 100, 1) if total_audit else 0
 
     # ── 5. COMPLIANCE → Card 5 ──
-    comp_rows = await bridge.get(bridge.db_service, "/compliance") or []
-    comp_list = comp_rows if isinstance(comp_rows, list) else []
     total_compliance = len(comp_list)
     low_risk_comp = sum(
         1 for c in comp_list
         if str(c.get("risklevel", "")).lower() in ("low", "very low", "negligible")
     )
-    # Estimate framework-level scores (SOC2, GDPR, ISO) from data
     comp_frameworks = {}
     for c in comp_list:
         name = c.get("name") or c.get("framework", "") or "General"
@@ -143,13 +276,20 @@ async def get_stats(ctx: dict = Depends(require_role("member"))):
         sum(comp_scores.values()) / len(comp_scores), 1
     ) if comp_scores else 0
 
-    # ── 6. TASKS → Card 6 ──
-    task_rows = await bridge.get(bridge.db_service, f"/retrieveTaskList/{emp_id}") or []
-    task_list = task_rows if isinstance(task_rows, list) else []
+    # ── 6. TASKS → Card 6 (enriched with in_progress + pending sub-metrics) ──
     total_tasks = len(task_list)
     completed_tasks = sum(
         1 for t in task_list
         if (t.get("status") or "").lower() in ("completed", "done", "closed", "resolved")
+    )
+    in_progress_tasks = sum(
+        1 for t in task_list
+        if (t.get("status") or "").lower() in ("in_progress", "in progress", "working", "started", "open")
+    )
+    pending_tasks = sum(
+        1 for t in task_list
+        if not (t.get("status") or "").strip()
+        or (t.get("status") or "").lower() in ("pending", "new", "not started", "blocked", "on hold")
     )
     overdue_tasks = sum(
         1 for t in task_list
@@ -158,8 +298,6 @@ async def get_stats(ctx: dict = Depends(require_role("member"))):
     completion_pct = round(completed_tasks / total_tasks * 100, 1) if total_tasks else 0
 
     # ── 7. BUDGETS → Card 8 ──
-    budget_rows = await bridge.get(bridge.db_service, "/budgetsListview") or []
-    budget_list = budget_rows if isinstance(budget_rows, list) else []
     total_budget_planned = sum(_get_json_val(b, "budgetAmount", default=0) for b in budget_list)
     total_budget_actual = sum(_get_json_val(b, "actualAmount", default=0) for b in budget_list)
     budget_variance = total_budget_actual - total_budget_planned
@@ -167,14 +305,10 @@ async def get_stats(ctx: dict = Depends(require_role("member"))):
         total_budget_actual / total_budget_planned * 100, 1
     ) if total_budget_planned else 0
 
-    # ── 8. MEETINGS → Card 9 (FIXED: was showing scorecards) ──
-    meeting_rows = await bridge.get(bridge.db_service, "/meetingManagementList/") or []
-    meeting_list = meeting_rows if isinstance(meeting_rows, list) else []
+    # ── 8. MEETINGS → Card 9 ──
     total_meetings = len(meeting_list)
 
     # ── 9. INITIATIVES / PROJECTS → Card 2 ──
-    init_rows = await bridge.get(bridge.db_service, "/initiativesList/") or []
-    init_list = init_rows if isinstance(init_rows, list) else []
     total_initiatives = len(init_list)
     progress_vals = []
     budget_planned = 0.0
@@ -204,13 +338,6 @@ async def get_stats(ctx: dict = Depends(require_role("member"))):
     )
     portfolio_budget = total_budget_planned + total_budget_actual
 
-    # ── 10. EMPLOYEES → org members ──
-    emp_count_row = await bridge._mysql(
-        "SELECT COUNT(*) as cnt FROM employee_details WHERE status = 'Active'",
-        one=True,
-    )
-    active_org_members = emp_count_row["cnt"] if emp_count_row else 0
-
     # ── STRATEGIC HEALTH → Card 10 (computed aggregate) ──
     # Weighted score: 40% compliance, 30% risk resilience, 30% avg progress
     risk_resilience = max(
@@ -239,7 +366,7 @@ async def get_stats(ctx: dict = Depends(require_role("member"))):
         "high_risks": high_risks,
         "medium_risks": medium_risks,
         "low_risks": low_risks,
-        # Card 4 — Audit (FIXED: now real audit data)
+        # Card 4 — Audit
         "audit_total": total_audit,
         "audit_open": open_audit,
         "audit_completion_pct": audit_completion_pct,
@@ -248,9 +375,11 @@ async def get_stats(ctx: dict = Depends(require_role("member"))):
         "compliance_pct": compliance_pct,
         "compliance_total": total_compliance,
         "compliance_gaps": total_compliance - low_risk_comp,
-        # Card 6 — Tasks
+        # Card 6 — Tasks (enriched with sub-metrics)
         "total_tasks": total_tasks,
         "completed_tasks": completed_tasks,
+        "in_progress_tasks": in_progress_tasks,
+        "pending_tasks": pending_tasks,
         "overdue_tasks": overdue_tasks,
         "task_completion_pct": completion_pct,
         # Card 7 — Incidents
@@ -263,7 +392,7 @@ async def get_stats(ctx: dict = Depends(require_role("member"))):
         "budget_planned": round(total_budget_planned, 2),
         "budget_actual": round(total_budget_actual, 2),
         "budget_utilisation": budget_utilisation,
-        # Card 9 — Meetings (FIXED: now real meetings data)
+        # Card 9 — Meetings
         "total_meetings": total_meetings,
         # Card 10 — Strategic Health
         "strategic_health": strategic_health,

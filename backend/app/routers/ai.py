@@ -6,6 +6,7 @@ import httpx
 from app.core.config import settings
 from app.core.deps import require_role
 from app.ai.llm_providers import call_llm
+from app.ai.tokens import sanitize_input, cap_response, estimate_tokens, token_benchmark, log_benchmark_line
 
 router = APIRouter(tags=["ai"])
 
@@ -52,10 +53,14 @@ class ChatRequest(BaseModel):
     @field_validator("user_message")
     @classmethod
     def validate_user_message(cls, v: str) -> str:
+        from app.ai.tokens import valid_input_chars
+
         if len(v) > settings.MAX_PROMPT_LENGTH:
             raise ValueError(f"User message exceeds maximum length of {settings.MAX_PROMPT_LENGTH}")
         if not v.strip():
             raise ValueError("User message cannot be empty")
+        if not valid_input_chars(v):
+            raise ValueError("User message contains disallowed control characters")
         return v
 
     @field_validator("max_tokens")
@@ -68,7 +73,8 @@ class ChatRequest(BaseModel):
 
 @router.post("/ai/chat")
 async def ai_chat(req: ChatRequest, ctx: dict = Depends(require_role("member"))):
-    messages = [{"role": "user", "content": req.user_message}]
+    user_message, truncated_in = sanitize_input(req.user_message)
+    messages = [{"role": "user", "content": user_message}]
 
     try:
         result_text = await call_llm(
@@ -77,10 +83,23 @@ async def ai_chat(req: ChatRequest, ctx: dict = Depends(require_role("member")))
             model=req.model,
             system_prompt=req.system_prompt,
             messages=messages,
-            max_tokens=req.max_tokens,
+            max_tokens=min(req.max_tokens, settings.MAX_LLM_MAX_TOKENS),
             base_url=req.base_url,
         )
-        return {"text": result_text}
+        response_text, truncated_out = cap_response(result_text)
+        token_benchmark.record(
+            agent="ai-chat",
+            input_chars=len(user_message),
+            output_chars=len(response_text),
+        )
+        log_benchmark_line("ai-chat", len(user_message), len(response_text))
+        return {
+            "text": response_text,
+            "input_truncated": truncated_in,
+            "output_truncated": truncated_out,
+            "input_tokens": estimate_tokens(user_message),
+            "output_tokens": estimate_tokens(response_text),
+        }
 
     except HTTPException:
         raise

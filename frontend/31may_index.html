@@ -9911,7 +9911,7 @@ else{setTimeout(initRiskPage,100);}
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap">
       <div>
         <div style="font-size:20px;font-weight:800">🎯 Strategy Scorecard</div>
-        <div style="font-size:12px;color:var(--text3)">5 Perspectives · Real-time Analysis</div>
+        <div style="font-size:12px;color:var(--text3)">6 Perspectives · Real-time Balanced Scorecard Analytics</div>
       </div>
       <div style="display:flex;gap:10px">
         <button class="btn btn-primary" onclick="toggleStrategyMap()">🗺️ Show Strategy Map</button>
@@ -9920,91 +9920,517 @@ else{setTimeout(initRiskPage,100);}
     </div>
   </div>
 
-  <!-- Scorecard Grid Container -->
-  <div id="scorecardGrid" class="scorecard-grid">
-    <div id="scorecard-loading" style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text3);">Loading scorecard data...</div>
+  <!-- Scorecard Grid Container (Modular Window Dashboard Overview) -->
+  <div id="scorecardGrid" class="scorecard-grid" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(340px, 1fr));gap:16px;">
+    <div id="scorecard-loading" style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text3);">Loading modular scorecard perspectives...</div>
   </div>
+
+  <!-- Dedicated Perspective Sub-Page View Container -->
+  <div id="scorecardDetailContainer" style="display:none;margin-top:12px;">
+    <!-- Inner Navigation Bar with Back Button and Relocated Drill-Down Tabs -->
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:20px;padding:12px 16px;background:var(--bg2,#0f172a);border:1px solid var(--border,#1e293b);border-radius:14px;box-shadow:0 4px 20px rgba(0,0,0,0.15);">
+      <button onclick="switchScorecardTab('all')" style="display:flex;align-items:center;gap:8px;padding:8px 16px;border-radius:10px;border:1px solid #0091ff;background:rgba(0,145,255,0.12);color:#0091ff;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.2s ease;">
+        <span>←</span> <span>Back to Scorecard Dashboard</span>
+      </button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:11px;font-weight:700;color:var(--text3,#64748b);text-transform:uppercase;letter-spacing:0.06em;margin-right:4px;">Inner Drill-Down:</span>
+        <button class="sc-inner-tab-btn" data-persp="financial" onclick="switchScorecardTab('financial',this)" style="padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border,#1e293b);cursor:pointer;background:transparent;color:var(--text,#f8fafc);">💰 Financial</button>
+        <button class="sc-inner-tab-btn" data-persp="customer" onclick="switchScorecardTab('customer',this)" style="padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border,#1e293b);cursor:pointer;background:transparent;color:var(--text,#f8fafc);">👥 Customer</button>
+        <button class="sc-inner-tab-btn" data-persp="ops" onclick="switchScorecardTab('ops',this)" style="padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border,#1e293b);cursor:pointer;background:transparent;color:var(--text,#f8fafc);">⚙️ Ops Excellence</button>
+        <button class="sc-inner-tab-btn" data-persp="projects" onclick="switchScorecardTab('projects',this)" style="padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border,#1e293b);cursor:pointer;background:transparent;color:var(--text,#f8fafc);">🏗️ Capital Projects</button>
+        <button class="sc-inner-tab-btn" data-persp="esg" onclick="switchScorecardTab('esg',this)" style="padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border,#1e293b);cursor:pointer;background:transparent;color:var(--text,#f8fafc);">🌿 ESG &amp; Compliance</button>
+        <button class="sc-inner-tab-btn" data-persp="people" onclick="switchScorecardTab('people',this)" style="padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border,#1e293b);cursor:pointer;background:transparent;color:var(--text,#f8fafc);">📚 People &amp; Capability</button>
+        <button class="sc-inner-tab-btn" data-persp="risk" onclick="switchScorecardTab('risk',this)" style="padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border,#1e293b);cursor:pointer;background:transparent;color:var(--text,#f8fafc);">⚠️ Risk &amp; Security</button>
+      </div>
+    </div>
+
+    <!-- Active Perspective Banner Header -->
+    <div id="sc-active-banner" style="background:linear-gradient(135deg, #10b981, #059669);border-radius:16px;padding:24px 28px;color:#fff;margin-bottom:20px;box-shadow:0 8px 32px rgba(0,0,0,0.2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;">
+      <div style="display:flex;align-items:center;gap:16px;">
+        <div id="sc-active-persp-icon" style="width:54px;height:54px;border-radius:14px;background:rgba(255,255,255,0.2);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;font-size:28px;border:1px solid rgba(255,255,255,0.3);">💰</div>
+        <div>
+          <div id="sc-active-persp-title" style="font-size:20px;font-weight:800;letter-spacing:-0.02em;">Financial Performance and Growth</div>
+          <div style="font-size:12px;opacity:0.9;margin-top:2px;">Dedicated Perspective Sub-Page Dashboard · Live MySQL Integration</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:20px;background:rgba(0,0,0,0.2);padding:12px 20px;border-radius:12px;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.15);">
+        <div style="text-align:center;">
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;opacity:0.8;">Score</div>
+          <div id="sc-active-persp-score" style="font-size:24px;font-weight:800;font-family:'DM Mono',monospace;line-height:1;margin-top:2px;">92.2%</div>
+        </div>
+        <div style="width:1px;height:32px;background:rgba(255,255,255,0.2);"></div>
+        <div style="text-align:center;">
+          <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;opacity:0.8;">Total KPIs</div>
+          <div id="sc-active-persp-kpi-count" style="font-size:24px;font-weight:800;font-family:'DM Mono',monospace;line-height:1;margin-top:2px;">9</div>
+        </div>
+        <div style="width:1px;height:32px;background:rgba(255,255,255,0.2);"></div>
+        <div style="display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:600;">
+          <span id="sc-active-persp-ontrack" style="color:#4ade80;">🟢 9 On Track</span>
+          <span id="sc-active-persp-atrisk" style="color:#fbbf24;">🟡 0 At Risk</span>
+          <span id="sc-active-persp-critical" style="color:#f87171;">🔴 0 Critical</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter & Search Controls Bar -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;background:var(--bg2,#0f172a);padding:12px 16px;border-radius:12px;border:1px solid var(--border,#1e293b);">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:11px;font-weight:700;color:var(--text3,#64748b);text-transform:uppercase;letter-spacing:0.06em;margin-right:4px;">Filter Status:</span>
+        <button class="sc-status-filter-btn active" data-status="all" onclick="filterPerspectiveByStatus('all',this)" style="padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:#0091ff;color:#fff;">All</button>
+        <button class="sc-status-filter-btn" data-status="on-track" onclick="filterPerspectiveByStatus('on-track',this)" style="padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border);cursor:pointer;background:transparent;color:var(--text2);">🟢 On Track</button>
+        <button class="sc-status-filter-btn" data-status="at-risk" onclick="filterPerspectiveByStatus('at-risk',this)" style="padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border);cursor:pointer;background:transparent;color:var(--text2);">🟡 At Risk</button>
+        <button class="sc-status-filter-btn" data-status="critical" onclick="filterPerspectiveByStatus('critical',this)" style="padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border);cursor:pointer;background:transparent;color:var(--text2);">🔴 Critical</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <input type="text" id="sc-matrix-search-input" placeholder="Search KPIs in this perspective..." oninput="filterPerspectiveSearch(this.value)" style="padding:6px 14px;border-radius:8px;border:1px solid var(--border,#1e293b);background:var(--surface,#1e293b);color:var(--text,#f8fafc);font-size:12px;outline:none;width:240px;" />
+      </div>
+    </div>
+
+    <!-- Dynamic Hierarchical Objectives & KPI Matrix Table -->
+    <div style="background:var(--bg2,#0f172a);border-radius:14px;border:1px solid var(--border,#1e293b);overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.15);">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead>
+          <tr style="background:var(--surface2,#1e293b);border-bottom:1px solid var(--border,#334155);color:var(--text3,#94a3b8);font-size:10px;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">
+            <th style="padding:12px 16px;text-align:left;width:100px;">Status</th>
+            <th style="padding:12px 16px;text-align:left;width:90px;">Code</th>
+            <th style="padding:12px 16px;text-align:left;">KPI / Sub-KPI Name</th>
+            <th style="padding:12px 16px;text-align:left;width:110px;">Period</th>
+            <th style="padding:12px 16px;text-align:right;width:90px;">Score</th>
+            <th style="padding:12px 16px;text-align:right;width:130px;">Actual</th>
+            <th style="padding:12px 16px;text-align:right;width:130px;">Target</th>
+            <th style="padding:12px 16px;text-align:center;width:80px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="sc-matrix-tbody">
+          <tr><td colspan="8" style="text-align:center;padding:36px;color:var(--text3);font-size:13px;">⚡ Loading perspective metrics...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <script>
   (function(){
-    const icons = { 'Financial':'💰','Customer':'👥','Internal Processes':'⚙️','Learning & Growth':'📚','ESG':'🌿','Risk':'⚠️','Default':'📊' };
-    const accentColors = { 'Financial':'var(--green)','Customer':'var(--blue2)','Internal Processes':'var(--amber)','Learning & Growth':'var(--red)','ESG':'var(--green)','Risk':'var(--orange)','Default':'var(--blue2)' };
-    const dimColors = { 'Financial':'var(--green-dim)','Customer':'var(--blue-dim)','Internal Processes':'var(--amber-dim)','Learning & Growth':'var(--red-dim)','ESG':'var(--green-dim)','Risk':'var(--orange-dim)','Default':'var(--blue-dim)' };
-    const borderColors = { 'Financial':'var(--green-border)','Customer':'var(--blue-border)','Internal Processes':'var(--amber-border)','Learning & Growth':'var(--red-border)','ESG':'var(--green-border)','Risk':'var(--orange-border)','Default':'var(--blue-border)' };
-    const nameMap = { 'Customer Stakeholder':'Customer','Internal Process':'Internal Processes','Learning Growth':'Learning & Growth','Learning_Growth':'Learning & Growth','Learning _Growth':'Learning & Growth','Transformation And Innovation':'Internal Processes','Transformation & Innovation':'Internal Processes','People And Organisational Capability':'Learning & Growth','People and Organisational Capability':'Learning & Growth','Governance Risk And Compliance':'Risk','Governance Risk and Compliance':'Risk','Governance And Strategy':'Risk','Governance and Strategy':'Risk','Capacity Expansion And Capital Projects':'Financial','Capacity Expansion and Capital Projects':'Financial','Financial Performance And Growth':'Financial','Financial Performance and Growth':'Financial','Financial Sustainability':'Financial','Manufacturing And Operational Excellence':'Internal Processes','Manufacturing and Operational Excellence':'Internal Processes','Customer And Market':'Customer','Customer and Market':'Customer','Customer Experience':'Customer','Efficiency':'Internal Processes','NA':'General' };
+    let currentTab = 'all';
+    let currentStatusFilter = 'all';
+    let currentSearchQuery = '';
+
+    function resolvePerspectiveMeta(pName, avgScore) {
+      const s = String(pName || '').toLowerCase().trim();
+
+      if (s.includes('financial') || s.includes('finance') || s.includes('revenue') || s.includes('profit') || s === 'fp') {
+        return { icon: '💰', accent: '#10b981', dim: 'rgba(16, 185, 129, 0.12)', border: 'rgba(16, 185, 129, 0.3)' };
+      }
+      if (s.includes('customer') || s.includes('market') || s.includes('client') || s.includes('stakeholder') || s === 'cm') {
+        return { icon: '👥', accent: '#3b82f6', dim: 'rgba(59, 130, 246, 0.12)', border: 'rgba(59, 130, 246, 0.3)' };
+      }
+      if (s.includes('manufactur') || s.includes('operation') || s.includes('internal') || s.includes('process') || s.includes('ops') || s.includes('efficiency')) {
+        return { icon: '⚙️', accent: '#f59e0b', dim: 'rgba(245, 158, 11, 0.12)', border: 'rgba(245, 158, 11, 0.3)' };
+      }
+      if (s.includes('project') || s.includes('capital') || s.includes('capacity') || s.includes('expansion') || s.includes('plant')) {
+        return { icon: '🏗️', accent: '#8b5cf6', dim: 'rgba(139, 92, 246, 0.12)', border: 'rgba(139, 92, 246, 0.3)' };
+      }
+      if (s.includes('esg') || s.includes('governance') || s.includes('compliance') || s.includes('regulatory') || s.includes('sustainab') || s === 'gov') {
+        return { icon: '🌿', accent: '#059669', dim: 'rgba(5, 150, 105, 0.12)', border: 'rgba(5, 150, 105, 0.3)' };
+      }
+      if (s.includes('people') || s.includes('learning') || s.includes('growth') || s.includes('capability') || s.includes('talent') || s.includes('workforce') || s === 'pc') {
+        return { icon: '📚', accent: '#ec4899', dim: 'rgba(236, 72, 153, 0.12)', border: 'rgba(236, 72, 153, 0.3)' };
+      }
+      if (s.includes('risk') || s.includes('security') || s.includes('cyber') || s.includes('threat') || s === 'rm') {
+        return { icon: '⚠️', accent: '#ef4444', dim: 'rgba(239, 68, 68, 0.12)', border: 'rgba(239, 68, 68, 0.3)' };
+      }
+
+      const fallbackIcons = ['🎯', '📊', '💡', '⚡', '🌐', '🛡️', '📈', '🚀'];
+      const fallbackAccents = ['#0091ff', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
+      let hash = 0;
+      for (let i = 0; i < s.length; i++) hash = (hash << 5) - hash + s.charCodeAt(i);
+      const iconIdx = Math.abs(hash) % fallbackIcons.length;
+      const accentColor = fallbackAccents[Math.abs(hash) % fallbackAccents.length];
+
+      return { icon: fallbackIcons[iconIdx], accent: accentColor, dim: 'rgba(255, 255, 255, 0.06)', border: 'rgba(255, 255, 255, 0.12)' };
+    }
+    window.resolvePerspectiveMeta = resolvePerspectiveMeta;
+
+    const PERSP_META = {
+      'financial': { title: 'Financial Performance and Growth', icon: '💰', color: 'linear-gradient(135deg, #10b981, #059669)' },
+      'customer':  { title: 'Customer and Market', icon: '👥', color: 'linear-gradient(135deg, #3b82f6, #1d4ed8)' },
+      'ops':       { title: 'Manufacturing and Operational Excellence', icon: '⚙️', color: 'linear-gradient(135deg, #f59e0b, #d97706)' },
+      'projects':  { title: 'Capacity Expansion and Capital Projects', icon: '🏗️', color: 'linear-gradient(135deg, #6366f1, #4338ca)' },
+      'risk':      { title: 'Risk & Security', icon: '⚠️', color: 'linear-gradient(135deg, #f97316, #ea580c)' },
+      'esg':       { title: 'Governance Risk and Compliance', icon: '🌿', color: 'linear-gradient(135deg, #10b981, #047857)' },
+      'people':    { title: 'People and Organisational Capability', icon: '📚', color: 'linear-gradient(135deg, #ef4444, #dc2626)' }
+    };
+
     function pct(a,t){ var aa=parseFloat(a)||0, tt=parseFloat(t)||0; return tt>0?Math.min(100,Math.round(aa/tt*100)):Math.min(100,aa); }
-    function itemColor(s) { var ls=(s||'').toLowerCase(); return ls==='on-track'||ls==='on track'?'var(--green)':ls==='at-risk'||ls==='at risk'?'var(--amber)':ls==='critical'?'var(--red)':'var(--text3)'; }
+    function itemColor(s) { var ls=(s||'').toLowerCase(); return ls==='on-track'||ls==='on track'?'#10b981':ls==='at-risk'||ls==='at risk'?'#f59e0b':ls==='critical'?'#ef4444':'#94a3b8'; }
     function itemArrow(s) { var ls=(s||'').toLowerCase(); return ls==='on-track'||ls==='on track'?'↑':ls==='at-risk'||ls==='at risk'?'→':ls==='critical'?'↓':'◆'; }
-    function scoreColor(sc) { return sc>=75?'var(--green)':sc>=50?'var(--amber)':'var(--red)'; }
+    function scoreColor(sc) { return sc>=75?'#10b981':sc>=50?'#f59e0b':'#ef4444'; }
     function scoreLabel(sc) { return sc>=75?'↑ On Track':sc>=50?'→ At Risk':'↓ Critical'; }
+
+    function perspToTabKey(p) {
+      if (!p) return 'all';
+      const s = String(p).toLowerCase().trim();
+      if (s === 'all') return 'all';
+      if (s.includes('financial') || s.includes('finance') || s === 'fp') return 'financial';
+      if (s.includes('customer') || s.includes('market') || s === 'cm') return 'customer';
+      if (s.includes('internal') || s.includes('process') || s.includes('ops') || s.includes('efficiency') || s.includes('manufacturing')) return 'ops';
+      if (s.includes('learning') || s.includes('growth') || s.includes('people') || s.includes('capability') || s.includes('culture') || s === 'pc' || s === 'lq') return 'people';
+      if (s.includes('esg') || s.includes('sustainability') || s.includes('governance') || s.includes('compliance') || s.includes('regulatory') || s === 'gov') return 'esg';
+      if (s.includes('risk') || s.includes('security') || s.includes('cyber') || s === 'rm') return 'risk';
+      if (s.includes('project') || s.includes('capital') || s.includes('capacity') || s.includes('expansion')) return 'projects';
+      return 'all';
+    }
+    window.perspToTabKey = perspToTabKey;
+
+    window.openScorecardPerspective = function(tabKey, kpiName) {
+      const resolvedKey = tabKey || 'financial';
+      const btn = document.querySelector('.sc-inner-tab-btn[data-persp="' + resolvedKey + '"]');
+      switchScorecardTab(resolvedKey, btn, true);
+      if (kpiName) {
+        renderPerspectiveDetailTable(resolvedKey, kpiName);
+      }
+    };
+
+    window.switchScorecardTab = function(tabKey, btnEl, updateHash) {
+      currentTab = tabKey || 'all';
+      currentStatusFilter = 'all';
+      currentSearchQuery = '';
+
+      const searchInput = document.getElementById('sc-matrix-search-input');
+      if (searchInput) searchInput.value = '';
+
+      document.querySelectorAll('.sc-status-filter-btn').forEach(b => {
+        b.style.background = 'transparent';
+        b.style.color = 'var(--text2,#94a3b8)';
+        b.classList.remove('active');
+      });
+      const allFilterBtn = document.querySelector('.sc-status-filter-btn[data-status="all"]');
+      if (allFilterBtn) {
+        allFilterBtn.style.background = '#0091ff';
+        allFilterBtn.style.color = '#fff';
+        allFilterBtn.classList.add('active');
+      }
+
+      document.querySelectorAll('.sc-inner-tab-btn').forEach(b => {
+        b.style.background = 'transparent';
+        b.style.color = 'var(--text,#f8fafc)';
+        b.style.fontWeight = '600';
+        b.style.border = '1px solid var(--border,#1e293b)';
+        b.classList.remove('active');
+      });
+
+      const activeBtn = btnEl || document.querySelector('.sc-inner-tab-btn[data-persp="' + currentTab + '"]');
+      if (activeBtn) {
+        activeBtn.style.background = '#0091ff';
+        activeBtn.style.color = '#fff';
+        activeBtn.style.fontWeight = '700';
+        activeBtn.style.border = 'none';
+        activeBtn.classList.add('active');
+      }
+
+      const overviewGrid = document.getElementById('scorecardGrid');
+      const detailContainer = document.getElementById('scorecardDetailContainer');
+
+      if (currentTab === 'all') {
+        if (overviewGrid) overviewGrid.style.display = 'grid';
+        if (detailContainer) detailContainer.style.display = 'none';
+        if (updateHash !== false) {
+          if (history.pushState) history.pushState(null, null, '#scorecard');
+          else window.location.hash = '#scorecard';
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        if (overviewGrid) overviewGrid.style.display = 'none';
+        if (detailContainer) detailContainer.style.display = 'block';
+        if (updateHash !== false) {
+          if (history.pushState) history.pushState(null, null, '#scorecard/perspective/' + currentTab);
+          else window.location.hash = '#scorecard/perspective/' + currentTab;
+        }
+        renderPerspectiveDetailTable(currentTab);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    };
+
+    window.filterPerspectiveByStatus = function(statusKey, btnEl) {
+      currentStatusFilter = statusKey;
+      document.querySelectorAll('.sc-status-filter-btn').forEach(b => {
+        b.style.background = 'transparent';
+        b.style.color = 'var(--text2,#94a3b8)';
+        b.classList.remove('active');
+      });
+      if (btnEl) {
+        btnEl.style.background = '#0091ff';
+        btnEl.style.color = '#fff';
+        btnEl.classList.add('active');
+      }
+      renderPerspectiveDetailTable(currentTab);
+    };
+
+    window.filterPerspectiveSearch = function(query) {
+      currentSearchQuery = query || '';
+      renderPerspectiveDetailTable(currentTab);
+    };
+
+    function renderPerspectiveDetailTable(tabKey, kpiFilter) {
+      const tbody = document.getElementById('sc-matrix-tbody');
+      const titleEl = document.getElementById('sc-active-persp-title');
+      const iconEl = document.getElementById('sc-active-persp-icon');
+      const bannerEl = document.getElementById('sc-active-banner');
+      const scoreEl = document.getElementById('sc-active-persp-score');
+      const countEl = document.getElementById('sc-active-persp-kpi-count');
+      const onTrackEl = document.getElementById('sc-active-persp-ontrack');
+      const atRiskEl = document.getElementById('sc-active-persp-atrisk');
+      const criticalEl = document.getElementById('sc-active-persp-critical');
+
+      if (!tbody) return;
+
+      const meta = PERSP_META[tabKey] || (typeof resolvePerspectiveMeta === 'function' ? resolvePerspectiveMeta(tabKey) : { title: 'Perspective Details', icon: '📊', color: 'linear-gradient(135deg,#0091ff,#0060df)' });
+      if (titleEl) titleEl.textContent = kpiFilter ? meta.title + ' · ' + kpiFilter : meta.title;
+      if (iconEl) iconEl.textContent = meta.icon;
+      if (bannerEl) bannerEl.style.background = meta.color || meta.accent;
+
+      if (!window._balancedScorecardData && !window._loadingBalancedScorecard) {
+        window._loadingBalancedScorecard = true;
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:36px;color:var(--text2,#94a3b8);font-size:13px;">⚡ Loading SKL Balanced Scorecard metrics...</td></tr>';
+        if (typeof window.loadScorecards === 'function') {
+          window.loadScorecards().finally(function() { window._loadingBalancedScorecard = false; });
+        }
+        return;
+      }
+
+      if (window._balancedScorecardData && Array.isArray(window._balancedScorecardData.perspectives)) {
+        var bPersps = window._balancedScorecardData.perspectives;
+        var activePersp = bPersps.find(function(p) { return p.tab === tabKey || perspToTabKey(p.name) === tabKey; });
+        if (!activePersp && tabKey !== 'all' && bPersps.length > 0) {
+          activePersp = bPersps[0];
+        }
+
+        if (activePersp) {
+          if (scoreEl) scoreEl.textContent = (Math.round(activePersp.score || 0)) + '%';
+          if (countEl) countEl.textContent = activePersp.total_kpis || 0;
+
+          var bOnTrackCount = 0, bAtRiskCount = 0, bCriticalCount = 0;
+          (activePersp.objectives || []).forEach(function(obj) {
+            (obj.kpis || []).forEach(function(k) {
+              var st = (k.status || '').toLowerCase();
+              if (st === 'on-track' || st === 'on track') bOnTrackCount++;
+              else if (st === 'at-risk' || st === 'at risk') bAtRiskCount++;
+              else if (st === 'critical' || st === 'lagging') bCriticalCount++;
+              else bOnTrackCount++;
+            });
+          });
+
+          if (onTrackEl) onTrackEl.textContent = '🟢 ' + bOnTrackCount + ' On Track';
+          if (atRiskEl) atRiskEl.textContent = '🟡 ' + bAtRiskCount + ' At Risk';
+          if (criticalEl) criticalEl.textContent = '🔴 ' + bCriticalCount + ' Critical';
+
+          let h = '';
+          (activePersp.objectives || []).forEach(function(obj) {
+            var kpis = obj.kpis || [];
+            if (kpiFilter) {
+              var q = kpiFilter.toLowerCase().trim();
+              kpis = kpis.filter(function(k) { return (k.name || '').toLowerCase().includes(q); });
+            }
+            if (currentStatusFilter && currentStatusFilter !== 'all') {
+              kpis = kpis.filter(function(k) {
+                var st = (k.status || '').toLowerCase().replace(/\s+/g, '-');
+                return st === currentStatusFilter;
+              });
+            }
+            if (currentSearchQuery) {
+              var sq = currentSearchQuery.toLowerCase().trim();
+              kpis = kpis.filter(function(k) {
+                return (k.name || '').toLowerCase().includes(sq) || (k.id || '').toLowerCase().includes(sq);
+              });
+            }
+
+            if (kpis.length === 0) return;
+
+            var objScore = Math.round(obj.score || 0);
+            h += `<tr class="sc-obj-header-row" style="background:var(--surface2,#1e293b);border-top:2px solid var(--border,#334155);border-bottom:1px solid var(--border,#334155);">
+              <td colspan="8" style="padding:10px 16px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;">
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="font-weight:800;color:var(--text,#f8fafc);font-size:13px;">${obj.id} - ${obj.name}</span>
+                    <span style="font-size:10px;color:var(--text3,#94a3b8);font-family:'DM Mono',monospace;">(${kpis.length} KPIs)</span>
+                  </div>
+                  <div style="font-weight:700;color:${scoreColor(objScore)};font-family:'DM Mono',monospace;font-size:12px;">
+                    Objective Score: ${objScore}%
+                  </div>
+                </div>
+              </td>
+            </tr>`;
+
+            kpis.forEach(function(kpi) {
+              var st = (kpi.status || 'on-track').toLowerCase();
+              var badgeBg = (st === 'on-track' || st === 'on track') ? 'rgba(16,185,129,0.15)' : (st === 'at-risk' || st === 'at risk') ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)';
+              var badgeColor = (st === 'on-track' || st === 'on track') ? '#10b981' : (st === 'at-risk' || st === 'at risk') ? '#f59e0b' : '#ef4444';
+              var badgeText = (st === 'on-track' || st === 'on track') ? '🟢 On Track' : (st === 'at-risk' || st === 'at risk') ? '🟡 At Risk' : '🔴 Critical';
+              var kpiScore = Math.round(kpi.score || 0);
+
+              h += `<tr style="border-bottom:1px solid var(--border,#1e293b);background:var(--bg2,#0f172a);transition:background 0.15s ease;">
+                <td style="padding:12px 16px;">
+                  <span style="display:inline-block;padding:3px 9px;border-radius:99px;font-size:10px;font-weight:700;background:${badgeBg};color:${badgeColor};border:1px solid ${badgeColor}33;">${badgeText}</span>
+                </td>
+                <td style="padding:12px 16px;font-family:'DM Mono',monospace;font-weight:700;color:var(--text3,#94a3b8);font-size:11px;">${kpi.id}</td>
+                <td style="padding:12px 16px;font-weight:600;color:var(--text,#f8fafc);font-size:12px;">
+                  ${kpi.name}
+                  ${kpi.weight ? `<span style="font-size:10px;color:var(--text3,#64748b);margin-left:6px;font-weight:400;">(Weight: ${kpi.weight})</span>` : ''}
+                </td>
+                <td style="padding:12px 16px;color:var(--text2,#cbd5e1);font-size:11px;">${kpi.period || 'Quarterly'}</td>
+                <td style="padding:12px 16px;text-align:right;font-family:'DM Mono',monospace;font-weight:700;color:${scoreColor(kpiScore)};font-size:12px;">${kpiScore}% ${itemArrow(st)}</td>
+                <td style="padding:12px 16px;text-align:right;font-family:'DM Mono',monospace;font-weight:700;color:var(--text,#f8fafc);font-size:12px;">${kpi.actual_formatted || kpi.actual || '—'}</td>
+                <td style="padding:12px 16px;text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:var(--text2,#94a3b8);font-size:12px;">${kpi.target_formatted || kpi.target || '—'}</td>
+                <td style="padding:12px 16px;text-align:center;">
+                  <button style="padding:3px 8px;border-radius:6px;border:1px solid var(--border,#334155);background:var(--surface,#1e293b);color:var(--blue2,#38bdf8);font-size:10px;font-weight:600;cursor:pointer;">Detail</button>
+                </td>
+              </tr>`;
+            });
+          });
+
+          if (!h) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:36px;color:var(--text3);font-size:13px;">No scorecards matching the current filter criteria for this perspective.</td></tr>';
+          } else {
+            tbody.innerHTML = h;
+          }
+          return;
+        }
+      }
+
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:36px;color:var(--text3);font-size:13px;">No perspective detail data available.</td></tr>';
+    }
+    window.renderPerspectiveDetailTable = renderPerspectiveDetailTable;
 
     async function loadScorecards() {
       const grid = document.getElementById('scorecardGrid');
       if (typeof window.isTokenValid === 'function' && !window.isTokenValid()) return;
       try {
-        const resp = await (window.authFetch || fetch)((window.BACKEND || '') + '/scorecards', { cache: 'no-store' });
+        const balancedUrl = (window.BACKEND || '') + '/scorecards/balanced';
+        const resp = await (window.authFetch || fetch)(balancedUrl, { cache: 'no-store' });
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const data = await resp.json();
-        var rows = data.scorecards || data;
-        if (!Array.isArray(rows) || rows.length === 0) throw new Error('No data');
-        const groups = {};
-        rows.forEach(function(r) {
-          var p = r.perspective || 'General';
-          if (!groups[p]) groups[p] = [];
-          groups[p].push(r);
-        });
-        var order = ['Financial','Customer','Internal Processes','Learning & Growth','ESG & Compliance','Risk & Security','General'];
-        var html = '';
-        order.forEach(function(p) {
-          if (!groups[p]) return;
-          var items = groups[p];
-          var sumScore = items.reduce(function(s,k){ return s + pct(k.actual, k.target); }, 0);
-          var avgScore = items.length ? Math.round(sumScore / items.length) : 0;
-          var c = scoreColor(avgScore);
-          var lbl = scoreLabel(avgScore);
-          var icon = icons[p] || icons.Default;
-          var accent = accentColors[p] || accentColors.Default;
-          var dim = dimColors[p] || dimColors.Default;
-          var border = borderColors[p] || borderColors.Default;
-          var kpis = items.slice(0,4).map(function(k) {
-            var sc = pct(k.actual, k.target);
-            var st = (k.status||'').toLowerCase();
-            var ar = itemArrow(st);
-            var cl = itemColor(st);
-            var nm = k.kpi_name || 'KPI';
-            return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%">'+nm+'</span><span style="color:'+cl+';font-weight:600;font-size:11px">'+sc+'% '+ar+'</span></div>';
-          }).join('');
-          var pills = items.slice(0,4).map(function(k) {
-            var nm = (k.kpi_name || 'KPI').replace(/Scorecard/g,'').trim() || 'KPI';
-            return '<span style="font-size:8px;padding:2px 8px;background:'+dim+';color:'+itemColor(k.status)+';border-radius:99px;border:1px solid '+border+'">'+nm+'</span>';
-          }).join('');
-          html += '<div class="sc-perspective-card" style="--card-accent:'+accent+'">'+
-            '<div style="height:4px;background:'+accent+';border-radius:var(--radius-card) var(--radius-card) 0 0"></div>'+
-            '<div style="padding:16px 18px 14px">'+
-              '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'+
-                '<div style="display:flex;align-items:center;gap:9px">'+
-                  '<div style="width:36px;height:36px;border-radius:10px;background:'+dim+';border:1px solid '+border+';display:flex;align-items:center;justify-content:center;font-size:18px">'+icon+'</div>'+
-                  '<div>'+
-                    '<div style="font-size:12px;font-weight:700;color:var(--text)">'+p+'</div>'+
-                    '<div style="font-size:9px;color:var(--text3);font-family:\'DM Mono\',monospace">'+items.length+' Scorecards</div>'+
-                  '</div>'+
-                '</div>'+
-                '<div style="text-align:right">'+
-                  '<div style="font-size:26px;font-weight:800;color:'+c+';line-height:1">'+avgScore+'%</div>'+
-                  '<div style="font-size:9px;color:'+c+'">'+lbl+'</div>'+
-                '</div>'+
-              '</div>'+
-              '<div style="height:6px;background:var(--surface);border-radius:99px;overflow:hidden;margin-bottom:12px"><div style="height:100%;width:'+Math.min(avgScore,100)+'%;background:'+c+';border-radius:99px;transition:width 1s ease-out"></div></div>'+
-              '<div style="display:flex;flex-direction:column;gap:3px;font-size:11px">'+kpis+'</div>'+
-              '<div style="margin-top:10px;display:flex;gap:5px;flex-wrap:wrap">'+pills+'</div>'+
-            '</div></div>';
-        });
-        if (!html) throw new Error('No perspectives');
-        grid.innerHTML = html;
+        const bData = await resp.json();
+        if (bData && Array.isArray(bData.perspectives) && bData.perspectives.length > 0) {
+          window._balancedScorecardData = bData;
+          var html = '';
+          bData.perspectives.forEach(function(p) {
+            var pName = p.name;
+            var tabKey = p.tab || perspToTabKey(pName);
+            var avgScore = Math.round(p.score || 0);
+            var c = scoreColor(avgScore);
+            var lbl = scoreLabel(avgScore);
+
+            var pMeta = resolvePerspectiveMeta(pName, avgScore);
+            var icon = pMeta.icon;
+            var accent = pMeta.accent;
+            var dim = pMeta.dim;
+            var border = pMeta.border;
+
+            var allKpis = [];
+            (p.objectives || []).forEach(function(o) {
+              (o.kpis || []).forEach(function(k) { allKpis.push(k); });
+            });
+
+            var kpisHtml = allKpis.slice(0, 4).map(function(k) {
+              var st = (k.status || 'on-track').toLowerCase();
+              var ar = itemArrow(st);
+              var cl = itemColor(st);
+              var nm = k.name || 'KPI';
+              var scoreVal = Math.round(k.score || 0);
+              return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border,#1e293b)"><span style="color:var(--text2,#94a3b8);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%">' + nm + '</span><span style="color:' + cl + ';font-weight:700;font-size:12px;font-family:\'DM Mono\',monospace">' + scoreVal + '% ' + ar + '</span></div>';
+            }).join('');
+
+            var pillsHtml = allKpis.slice(0, 4).map(function(k) {
+              var nm = (k.name || 'KPI').replace(/Scorecard/g, '').trim();
+              return '<span style="font-size:9px;padding:3px 9px;background:' + dim + ';color:' + itemColor(k.status) + ';border-radius:99px;border:1px solid ' + border + ';font-weight:600">' + nm + '</span>';
+            }).join('');
+
+            html += '<div class="sc-perspective-card" style="--card-accent:' + accent + ';cursor:pointer;background:var(--bg2,#0f172a);border-radius:14px;border:1px solid var(--border,#1e293b);box-shadow:0 4px 20px rgba(0,0,0,0.15);transition:transform 0.2s ease, box-shadow 0.2s ease;overflow:hidden;" onclick="openScorecardPerspective(\'' + tabKey + '\')">' +
+              '<div style="height:4px;background:' + accent + '"></div>' +
+              '<div style="padding:18px 20px 16px">' +
+                '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
+                  '<div style="display:flex;align-items:center;gap:12px">' +
+                    '<div style="width:40px;height:40px;border-radius:12px;background:' + dim + ';border:1px solid ' + border + ';display:flex;align-items:center;justify-content:center;font-size:20px">' + icon + '</div>' +
+                    '<div>' +
+                      '<div style="font-size:13px;font-weight:700;color:var(--text,#f8fafc);letter-spacing:-0.01em">' + pName + '</div>' +
+                      '<div style="font-size:10px;color:var(--text3,#64748b);font-family:\'DM Mono\',monospace;margin-top:2px">' + p.total_kpis + ' KPIs</div>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div style="text-align:right">' +
+                    '<div style="font-size:28px;font-weight:800;color:' + c + ';line-height:1;font-family:\'DM Mono\',monospace">' + avgScore + '%</div>' +
+                    '<div style="font-size:10px;font-weight:700;color:' + c + ';margin-top:2px">' + lbl + '</div>' +
+                  '</div>' +
+                '</div>' +
+                '<div style="height:6px;background:var(--surface,#1e293b);border-radius:99px;overflow:hidden;margin-bottom:14px"><div style="height:100%;width:' + Math.min(avgScore, 100) + '%;background:' + c + ';border-radius:99px;transition:width 0.8s ease-out"></div></div>' +
+                '<div style="display:flex;flex-direction:column;gap:2px;margin-bottom:12px">' + kpisHtml + '</div>' +
+                '<div style="display:flex;gap:6px;flex-wrap:wrap">' + pillsHtml + '</div>' +
+              '</div></div>';
+          });
+          if (html && grid) grid.innerHTML = html;
+
+          const kpiTable = document.getElementById('kpi-table');
+          if (kpiTable && bData && Array.isArray(bData.perspectives)) {
+            var allKpiRows = [];
+            bData.perspectives.forEach(function(p) {
+              (p.objectives || []).forEach(function(o) {
+                (o.kpis || []).forEach(function(k) {
+                  allKpiRows.push(k);
+                });
+              });
+            });
+
+            if (allKpiRows.length > 0) {
+              var kpiHtml = '<thead><tr style="background:var(--surface2,#1e293b);border-bottom:1px solid var(--border,#334155);color:var(--text3,#94a3b8);font-size:10px;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;"><th style="text-align:left;padding:10px 14px;width:100px;">Code</th><th style="text-align:left;padding:10px 14px;">KPI</th><th style="text-align:right;padding:10px 14px;width:120px;">Target</th><th style="text-align:right;padding:10px 14px;width:120px;">Actual</th><th style="text-align:center;padding:10px 14px;width:100px;">Status</th></tr></thead><tbody>';
+              kpiHtml += allKpiRows.slice(0, 10).map(function(k) {
+                var st = (k.status || 'on-track').toLowerCase();
+                var badgeBg = (st === 'on-track' || st === 'on track') ? 'rgba(16,185,129,0.15)' : (st === 'at-risk' || st === 'at risk') ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)';
+                var badgeColor = (st === 'on-track' || st === 'on track') ? '#10b981' : (st === 'at-risk' || st === 'at risk') ? '#f59e0b' : '#ef4444';
+                var badgeText = (st === 'on-track' || st === 'on track') ? '🟢 On Track' : (st === 'at-risk' || st === 'at risk') ? '🟡 At Risk' : '🔴 Critical';
+                var nm = k.name || 'KPI';
+                var tgt = k.target_formatted || k.target || '—';
+                var act = k.actual_formatted || k.actual || '—';
+                var kid = k.id || 'KPI';
+
+                return '<tr style="border-bottom:1px solid var(--border,#1e293b);background:var(--bg2,#0f172a);"><td style="padding:10px 14px;font-family:\'DM Mono\',monospace;font-weight:700;color:var(--text3,#94a3b8);font-size:11px;">' + kid + '</td><td style="padding:10px 14px;font-weight:600;color:var(--text,#f8fafc);font-size:12px;">' + nm + '</td><td style="padding:10px 14px;text-align:right;font-family:\'DM Mono\',monospace;color:var(--text2,#cbd5e1);font-size:12px;">' + tgt + '</td><td style="padding:10px 14px;text-align:right;font-family:\'DM Mono\',monospace;font-weight:700;color:var(--text,#f8fafc);font-size:12px;">' + act + '</td><td style="padding:10px 14px;text-align:center;"><span style="display:inline-block;padding:3px 8px;border-radius:99px;font-size:10px;font-weight:700;background:' + badgeBg + ';color:' + badgeColor + ';border:1px solid ' + badgeColor + '33;">' + badgeText + '</span></td></tr>';
+              }).join('');
+              kpiHtml += '</tbody>';
+              kpiTable.innerHTML = kpiHtml;
+            }
+          }
+
+          function handleScorecardHashRoute() {
+            const hash = window.location.hash || '';
+            if (hash.includes('#scorecard/perspective/') || hash.includes('#scorecard/details/') || hash.includes('#scorecard/')) {
+              const parts = hash.split('/');
+              if (parts.length >= 3) {
+                const pKey = parts[parts.length - 1];
+                if (pKey && pKey !== 'scorecard') {
+                  const tabKey = perspToTabKey(pKey);
+                  if (tabKey && tabKey !== 'all') {
+                    switchScorecardTab(tabKey, null, false);
+                  }
+                }
+              }
+            }
+          }
+          window.handleScorecardHashRoute = handleScorecardHashRoute;
+          handleScorecardHashRoute();
+
+          if (currentTab !== 'all') {
+            renderPerspectiveDetailTable(currentTab);
+          }
+          return;
+        }
       } catch(e) {
-        console.warn('Scorecard load failed, showing empty state', e);
-        if (grid) grid.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--text3);grid-column:1/-1;"><div style="font-size:48px;margin-bottom:12px;">📊</div><div style="font-size:16px;font-weight:600;margin-bottom:6px;">No Scorecard Data</div><div style="font-size:12px;">Connect the backend API to populate scorecard perspectives with live data.</div></div>';
+        console.warn('Scorecard balanced load failed', e);
       }
     }
+    window.loadScorecards = loadScorecards;
+
+    window.addEventListener('hashchange', function() {
+      if (typeof window.handleScorecardHashRoute === 'function') {
+        window.handleScorecardHashRoute();
+      }
+    });
+
     if (typeof window.isTokenValid === 'function' && window.isTokenValid()) { loadScorecards(); }
     else if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', function() { if (typeof window.isTokenValid === 'function' && window.isTokenValid()) loadScorecards(); }); }
   })();
@@ -10097,11 +10523,11 @@ else{setTimeout(initRiskPage,100);}
 
   <!-- KPI Detail Table -->
   <div style="margin-top:24px">
-    <div style="font-size:13px;font-weight:700;margin-bottom:10px">📋 KPI Detail</div>
-    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px">📋 KPI Detail (Top Performance Indicators)</div>
+    <div style="background:var(--bg2,#0f172a);border:1px solid var(--border,#1e293b);border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.15);">
       <table id="kpi-table" style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead><tr><th style="text-align:left;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">KPI</th><th style="text-align:left;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">Target</th><th style="text-align:left;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">Actual</th><th style="text-align:left;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">Status</th></tr></thead>
-        <tbody><tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text3)">Loading KPI details...</td></tr></tbody>
+        <thead><tr style="background:var(--surface2,#1e293b);border-bottom:1px solid var(--border,#334155);color:var(--text3,#94a3b8);font-size:10px;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;"><th style="text-align:left;padding:10px 14px;width:100px;">Code</th><th style="text-align:left;padding:10px 14px;">KPI</th><th style="text-align:right;padding:10px 14px;width:120px;">Target</th><th style="text-align:right;padding:10px 14px;width:120px;">Actual</th><th style="text-align:center;padding:10px 14px;width:100px;">Status</th></tr></thead>
+        <tbody><tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text3,#94a3b8)">⚡ Loading KPI details...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -13525,6 +13951,7 @@ body.theme-light .filter-select, body.theme-light .filter-input { background: #f
       </div>
     </div>
     <div style="display:flex;gap:6px;">
+      <button class="btn btn-primary" onclick="openOrgModal(null)" style="font-size:10px;padding:4px 12px;background:#0091ff;border:none;font-weight:700;box-shadow:0 4px 12px rgba(0,145,255,0.3);">+ Add Org Structure</button>
       <button class="btn btn-ghost" onclick="orgExpandAll()" style="font-size:10px;padding:4px 10px;">📂 Expand</button>
       <button class="btn btn-ghost" onclick="orgCollapseAll()" style="font-size:10px;padding:4px 10px;">📁 Collapse</button>
       <button class="btn btn-primary" onclick="orgSyncNow()" style="font-size:10px;padding:4px 12px;">↺ Sync</button>
@@ -13928,35 +14355,72 @@ body.theme-light .filter-select, body.theme-light .filter-input { background: #f
     const show        = nodeMatchesFilters(node) || hasVisibleDescendant(node);
     if (!show) return '';
 
-    const borderCol   = DEPT_COLORS[node.dept] || 'var(--border2)';
     const count       = node.headcount || (hasChildren ? (node.children||[]).length : 1);
-    const hasUser     = !!node.user_id;
+    const initials    = (node.name || 'User').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    const deptDisplay = node.dept_name || node.dept || 'N/A';
+    const titleDisplay= node.title || 'N/A';
+    const locDisplay  = node.location || node.region || 'Singapore';
+    const roleDisplay = node.role || (level === 0 ? 'Executive' : 'Member');
 
-    let h = '<div class="org-tree-node level-' + level + '" data-id="' + esc(node.id) + '" data-dept="' + esc(node.dept||'') + '" data-region="' + esc(node.region||'') + '">';
-    h += '<div class="org-tree-header" onclick="window._orgToggle(\'' + esc(node.id) + '\')"';
-    h += ' style="border-left:2px solid ' + borderCol + ';padding-left:8px;">';
+    const avatarGrads = [
+      'linear-gradient(135deg, #0091ff, #0052cc)',
+      'linear-gradient(135deg, #10b981, #059669)',
+      'linear-gradient(135deg, #8b5cf6, #6d28d9)',
+      'linear-gradient(135deg, #f59e0b, #d97706)',
+      'linear-gradient(135deg, #ec4899, #be185d)'
+    ];
+    let hash = 0;
+    for (let i = 0; i < (node.name || '').length; i++) hash = (hash << 5) - hash + node.name.charCodeAt(i);
+    const grad = avatarGrads[Math.abs(hash) % avatarGrads.length];
+
+    let h = '<div class="org-tree-node-wrapper" style="position:relative;margin-bottom:10px;" data-id="' + esc(node.id) + '">';
+    h += '<div class="org-node-card" style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;background:var(--bg2,#0f172a);border:1px solid var(--border,#1e293b);border-radius:14px;box-shadow:0 4px 16px rgba(0,0,0,0.12);transition:all 0.2s ease;" onmouseover="this.style.borderColor=\'#0091ff\'" onmouseout="this.style.borderColor=\'var(--border,#1e293b)\'">';
+
+    // Left: Expand Toggle & Initials Avatar & Metadata Grid
+    h += '<div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0;">';
 
     if (hasChildren) {
-      h += '<span class="org-tree-expand ' + (isExpanded?'expanded':'') + '">▶</span>';
+      h += '<button onclick="window._orgToggle(\'' + esc(node.id) + '\')" style="width:26px;height:26px;border-radius:8px;border:1px solid var(--border,#334155);background:var(--surface,#1e293b);color:var(--text,#f8fafc);font-size:13px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s ease;">' + (isExpanded ? '−' : '+') + '</button>';
     } else {
-      h += '<span class="org-tree-expand" style="opacity:0;">▶</span>';
+      h += '<span style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;color:var(--text3,#64748b);font-size:10px;">•</span>';
     }
 
-    const avatarBg = hasUser ? 'background:var(--blue);color:#fff;border-radius:50%;' : '';
-    const initials = node.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-    h += '<span class="org-tree-icon" style="' + avatarBg + '">' + (hasUser ? initials : (node.icon||'👤')) + '</span>';
-    h += '<div class="org-tree-info">';
-    h += '<span class="org-tree-name">' + esc(node.name) + '</span>';
-    h += '<span class="org-tree-title">' + esc(node.title) + '</span>';
-    if (node.region) h += '<span class="org-tree-dept">' + esc(node.region) + '</span>';
-    if (LEVEL_LABELS[node.level]) h += '<span class="org-tree-dept" style="background:var(--surface3);">' + esc(LEVEL_LABELS[node.level]) + '</span>';
-    if (hasUser && node.role) h += '<span class="org-tree-dept" style="background:var(--blue-dim);color:var(--blue);">' + esc(node.role) + '</span>';
-    if (count > 1) h += '<span class="org-node-count">👤 ' + count + '</span>';
-    h += '</div></div>';
+    h += '<div style="width:42px;height:42px;border-radius:50%;background:' + grad + ';color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;letter-spacing:0.05em;border:2px solid rgba(255,255,255,0.2);box-shadow:0 2px 8px rgba(0,0,0,0.25);flex-shrink:0;">' + initials + '</div>';
 
-    if (hasChildren) {
-      h += '<div class="org-tree-children ' + (isExpanded?'':'collapsed') + '">';
-      node.children.forEach(c => { h += renderNode(c, level+1); });
+    // Metadata Grid matching reference image
+    h += '<div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:0;">';
+    h += '<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">';
+    h += '<div><span style="color:var(--text3,#64748b);font-weight:600;font-size:11px;">Name - </span><strong style="color:var(--text,#f8fafc);font-size:13px;letter-spacing:-0.01em;">' + esc(node.name) + '</strong></div>';
+    h += '<div><span style="color:var(--text3,#64748b);font-weight:600;font-size:11px;">Department - </span><span style="color:var(--text2,#cbd5e1);font-weight:600;font-size:12px;">' + esc(deptDisplay) + '</span></div>';
+    h += '</div>';
+    h += '<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">';
+    h += '<div><span style="color:var(--text3,#64748b);font-weight:600;font-size:11px;">Designation - </span><span style="color:var(--text2,#cbd5e1);font-size:11px;">' + esc(titleDisplay) + '</span></div>';
+    h += '<div><span style="color:var(--text3,#64748b);font-weight:600;font-size:11px;">Location - </span><span style="color:var(--text3,#94a3b8);font-size:11px;">' + esc(locDisplay) + '</span></div>';
+    h += '</div>';
+    h += '</div>';
+    h += '</div>';
+
+    // Right side: Action buttons (+) (✏️) (🗑️) & Subordinate count badge
+    h += '<div style="display:flex;align-items:center;gap:12px;flex-shrink:0;margin-left:16px;">';
+
+    // Action buttons container
+    h += '<div style="display:flex;align-items:center;gap:6px;">';
+    h += '<button onclick="event.stopPropagation(); openOrgModal(null, \'' + esc(node.id) + '\')" style="width:28px;height:28px;border-radius:50%;border:1px solid var(--border2,#475569);background:var(--surface,#1e293b);color:var(--text2,#cbd5e1);font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all 0.15s ease;" onmouseover="this.style.borderColor=\'#0091ff\';this.style.color=\'#0091ff\';this.style.background=\'rgba(0,145,255,0.12)\'" onmouseout="this.style.borderColor=\'var(--border2,#475569)\';this.style.color=\'var(--text2,#cbd5e1)\';this.style.background=\'var(--surface,#1e293b)\'" title="Add Subordinate / Role under ' + esc(node.name) + '">+</button>';
+    h += '<button onclick="event.stopPropagation(); openOrgModal(\'' + esc(node.id) + '\')" style="width:28px;height:28px;border-radius:50%;border:1px solid var(--border2,#475569);background:var(--surface,#1e293b);color:var(--text2,#cbd5e1);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all 0.15s ease;" onmouseover="this.style.borderColor=\'#0091ff\';this.style.color=\'#0091ff\';this.style.background=\'rgba(0,145,255,0.12)\'" onmouseout="this.style.borderColor=\'var(--border2,#475569)\';this.style.color=\'var(--text2,#cbd5e1)\';this.style.background=\'var(--surface,#1e293b)\'" title="Edit ' + esc(node.name) + '">✏️</button>';
+    h += '<button onclick="event.stopPropagation(); confirmDeleteOrgNode(\'' + esc(node.id) + '\', \'' + esc(node.name) + '\')" style="width:28px;height:28px;border-radius:50%;border:1px solid var(--border2,#475569);background:var(--surface,#1e293b);color:var(--text2,#cbd5e1);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all 0.15s ease;" onmouseover="this.style.borderColor=\'#ef4444\';this.style.color=\'#ef4444\';this.style.background=\'rgba(239,68,68,0.12)\'" onmouseout="this.style.borderColor=\'var(--border2,#475569)\';this.style.color=\'var(--text2,#cbd5e1)\';this.style.background=\'var(--surface,#1e293b)\'" title="Delete ' + esc(node.name) + '">🗑️</button>';
+    h += '</div>';
+
+    if (count > 1) {
+      h += '<span style="font-size:10px;font-weight:700;padding:4px 9px;border-radius:99px;background:var(--surface,#1e293b);color:var(--text3,#94a3b8);border:1px solid var(--border,#334155);" title="' + count + ' direct/indirect subordinates">👤 ' + count + '</span>';
+    }
+
+    h += '</div>';
+
+    h += '</div>';
+
+    if (hasChildren && isExpanded) {
+      h += '<div style="border-left:2px solid var(--border,#334155);margin-left:32px;padding-left:16px;margin-top:10px;display:flex;flex-direction:column;gap:10px;">';
+      node.children.forEach(c => { h += renderNode(c, level + 1); });
       h += '</div>';
     }
     h += '</div>';
@@ -14129,6 +14593,151 @@ body.theme-light .filter-select, body.theme-light .filter-input { background: #f
       output.style.borderLeft = '3px solid var(--green)';
       output.style.padding = '12px';
       output.style.borderRadius = '8px';
+    }
+  };
+
+  // ── Modal & CRUD Handlers ──────────────────────────────────────────────────
+  let pendingDeleteId = null;
+
+  window.openOrgModal = function(empId, parentId) {
+    const modal = document.getElementById('orgModal');
+    const titleEl = document.getElementById('orgModalTitle');
+    const editIdInput = document.getElementById('org-edit-id');
+    const empIdInput = document.getElementById('org-input-empid');
+    const deptInput = document.getElementById('org-input-dept');
+    const deptCodeInput = document.getElementById('org-input-deptcode');
+    const ownerSelect = document.getElementById('org-select-owner');
+    const emailInput = document.getElementById('org-input-email');
+    const nameInput = document.getElementById('org-input-name');
+
+    const people = getPeople();
+    if (ownerSelect) {
+      ownerSelect.innerHTML = '<option value="">Select Owner</option>' + people.map(p => '<option value="' + p.id + '">' + esc(p.name) + ' (' + esc(p.dept_name||p.dept||'') + ')</option>').join('');
+    }
+
+    if (empId) {
+      const node = people.find(p => String(p.id) === String(empId));
+      if (node) {
+        titleEl.textContent = 'Edit Org Structure';
+        editIdInput.value = node.id;
+        empIdInput.value = node.id;
+        deptInput.value = node.dept_name || node.dept || '';
+        deptCodeInput.value = (node.dept || '').toUpperCase();
+        if (ownerSelect) ownerSelect.value = node.parent_id || '';
+        emailInput.value = node.email || '';
+        nameInput.value = node.name || '';
+      }
+    } else {
+      titleEl.textContent = 'Create Org Structure';
+      editIdInput.value = '';
+      empIdInput.value = '';
+      deptInput.value = '';
+      deptCodeInput.value = '';
+      if (ownerSelect) ownerSelect.value = parentId || '';
+      emailInput.value = '';
+      nameInput.value = '';
+    }
+
+    if (modal) modal.style.display = 'flex';
+  };
+
+  window.closeOrgModal = function() {
+    const modal = document.getElementById('orgModal');
+    if (modal) modal.style.display = 'none';
+  };
+
+  window.saveOrgModal = async function(e) {
+    e.preventDefault();
+    const submitBtn = document.getElementById('org-modal-submit-btn');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving...'; }
+
+    const editId = document.getElementById('org-edit-id').value;
+    const empId = document.getElementById('org-input-empid').value;
+    const dept = document.getElementById('org-input-dept').value;
+    const deptCode = document.getElementById('org-input-deptcode').value;
+    const ownerId = document.getElementById('org-select-owner').value;
+    const email = document.getElementById('org-input-email').value;
+    const name = document.getElementById('org-input-name').value;
+
+    const payload = {
+      first_name: name,
+      email_address: email,
+      title: deptCode || 'Manager',
+      department: dept,
+      parent_emp_id: ownerId ? parseInt(ownerId) : null,
+    };
+
+    try {
+      let resp;
+      if (editId) {
+        resp = await window.authFetch('/org/members/' + editId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } else {
+        resp = await window.authFetch('/org/members', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      if (resp.ok) {
+        closeOrgModal();
+        await orgSyncNow();
+        const toast = document.createElement('div');
+        toast.textContent = editId ? '✅ Record updated successfully' : '✅ Subordinate/Role added successfully';
+        toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:var(--green-dim);border:1px solid var(--green-border);color:var(--green);padding:10px 18px;border-radius:8px;font-size:12px;z-index:10000';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2500);
+      } else {
+        alert('Failed to save record.');
+      }
+    } catch(err) {
+      console.error('Org save failed:', err);
+      alert('Error saving record: ' + err.message);
+    } finally {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Save'; }
+    }
+  };
+
+  window.confirmDeleteOrgNode = function(empId, empName) {
+    pendingDeleteId = empId;
+    const modal = document.getElementById('orgDeleteModal');
+    const msg = document.getElementById('orgDeleteMsg');
+    if (msg) msg.textContent = 'Are you sure you want to delete "' + (empName || 'this record') + '"?';
+    if (modal) modal.style.display = 'flex';
+  };
+
+  window.closeOrgDeleteModal = function() {
+    pendingDeleteId = null;
+    const modal = document.getElementById('orgDeleteModal');
+    if (modal) modal.style.display = 'none';
+  };
+
+  window.executeOrgDelete = async function() {
+    if (!pendingDeleteId) return;
+    const btn = document.getElementById('orgConfirmDeleteBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Deleting...'; }
+
+    try {
+      const resp = await window.authFetch('/org/members/' + pendingDeleteId, {
+        method: 'DELETE'
+      });
+      if (resp.ok) {
+        closeOrgDeleteModal();
+        orgSyncNow();
+        const toast = document.createElement('div');
+        toast.textContent = '✅ Record deleted successfully';
+        toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:var(--red-dim);border:1px solid var(--red-border);color:var(--red);padding:10px 18px;border-radius:8px;font-size:12px;z-index:10000';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2500);
+      }
+    } catch(err) {
+      console.error('Org delete failed:', err);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Delete'; }
     }
   };
 
@@ -20143,14 +20752,13 @@ canvas{max-width:100%!important}
 /* ── FIX: Light theme whatsapp ── */
 body.theme-light .whatsapp-panel,body.theme-light .whatsapp-role-admin{background:#ffffff!important;border:1px solid #d1d1d1!important}
 /* ── FIX: Scorecard grid ── */
-.scorecard-grid{display:grid!important;grid-template-columns:repeat(3,1fr)!important;gap:14px!important;margin-bottom:28px!important}
+.scorecard-grid{grid-template-columns:repeat(3,1fr)!important;gap:14px!important;margin-bottom:28px!important}
 @media(max-width:1200px){.scorecard-grid{grid-template-columns:repeat(2,1fr)!important}}
 @media(max-width:760px){.scorecard-grid{grid-template-columns:1fr!important}}
 .sc-perspective-card{background:var(--bg2)!important;border:1px solid var(--border)!important;border-radius:var(--radius-card)!important;overflow:visible!important;transition:transform .18s ease,box-shadow .18s ease!important;display:flex!important;flex-direction:column!important}
 .sc-perspective-card:hover{transform:translateY(-2px)!important;box-shadow:0 8px 28px rgba(0,0,0,.4)!important}
 #view-scorecard{display:none;overflow:visible!important;height:auto!important;min-height:0!important}
 #view-scorecard.active{display:block!important}
-#scorecardGrid{display:grid!important;visibility:visible!important;opacity:1!important}
 /* ── FIX: Strategy Map ── */
 #strategy-map-section{background:var(--bg2)!important;border-radius:20px!important;border:1px solid var(--border)!important;margin-top:24px!important;overflow:hidden!important}
 #strategy-map-section .map-canvas-wrapper{padding:24px!important;overflow-x:auto!important;min-height:420px!important}
@@ -21650,79 +22258,12 @@ if (document.readyState === 'loading') {
 
   // ── 5b. INJECT SCORECARD DATA ──
   async function hydrateScorecardPage() {
-    const scorecards = await loadScorecardsFromBackend();
-    if (!scorecards || !scorecards.length) return false;
-    const grid = document.getElementById('scorecardGrid');
-    if (!grid) return false;
-    function pct(a,t){ var aa=parseFloat(a)||0, tt=parseFloat(t)||0; return tt>0?Math.min(100,Math.round(aa/tt*100)):Math.min(100,aa); }
-    function itemColor(s){ var ls=(s||'').toLowerCase(); return ls==='on-track'||ls==='on track'?'var(--green)':ls==='at-risk'||ls==='at risk'?'var(--amber)':ls==='critical'?'var(--red)':'var(--text3)'; }
-    function itemArrow(s){ var ls=(s||'').toLowerCase(); return ls==='on-track'||ls==='on track'?'↑':ls==='at-risk'||ls==='at risk'?'→':ls==='critical'?'↓':'◆'; }
-    function scoreColor(sc){ return sc>=75?'var(--green)':sc>=50?'var(--amber)':'var(--red)'; }
-    function scoreLabel(sc){ return sc>=75?'↑ On Track':sc>=50?'→ At Risk':'↓ Critical'; }
-    var icons = { 'Financial':'💰', 'Customer':'👥', 'Internal Processes':'⚙️', 'Learning & Growth':'📚', 'ESG & Compliance':'🌿', 'Risk & Security':'⚠️' };
-    var accentColors = { 'Financial':'var(--green)','Customer':'var(--blue2)','Internal Processes':'var(--amber)','Learning & Growth':'var(--red)','ESG & Compliance':'var(--green)','Risk & Security':'var(--orange)','Default':'var(--blue2)' };
-    var dimColors = { 'Financial':'var(--green-dim)','Customer':'var(--blue-dim)','Internal Processes':'var(--amber-dim)','Learning & Growth':'var(--red-dim)','ESG & Compliance':'var(--green-dim)','Risk & Security':'var(--orange-dim)','Default':'var(--blue-dim)' };
-    var borderColors = { 'Financial':'var(--green-border)','Customer':'var(--blue-border)','Internal Processes':'var(--amber-border)','Learning & Growth':'var(--red-border)','ESG & Compliance':'var(--green-border)','Risk & Security':'var(--orange-border)','Default':'var(--blue-border)' };
-    var perspectiveMap = {};
-    scorecards.forEach(function(s) {
-      var p = s.perspective || 'General';
-      if (!perspectiveMap[p]) perspectiveMap[p] = [];
-      perspectiveMap[p].push(s);
-    });
-    var order = ['Financial','Customer','Internal Processes','Learning & Growth','ESG & Compliance','Risk & Security','General'];
-    grid.innerHTML = order.map(function(p) {
-      var items = perspectiveMap[p];
-      if (!items || !items.length) return '';
-      var sumScore = items.reduce(function(s,k){ return s + pct(k.actual, k.target); }, 0);
-      var avgScore = items.length ? Math.round(sumScore / items.length) : 0;
-      var c = scoreColor(avgScore);
-      var lbl = scoreLabel(avgScore);
-      var icon = icons[p] || '📊';
-      var accent = accentColors[p] || accentColors.Default;
-      var dim = dimColors[p] || dimColors.Default;
-      var border = borderColors[p] || borderColors.Default;
-      var kpis = items.slice(0,4).map(function(k) {
-        var sc = pct(k.actual, k.target);
-        var nm = k.kpi_name || 'KPI';
-        return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text2);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%">'+nm+'</span><span style="color:'+itemColor(k.status)+';font-weight:600;font-size:11px">'+sc+'% '+itemArrow(k.status)+'</span></div>';
-      }).join('');
-      var pills = items.slice(0,4).map(function(k) {
-        var nm = (k.kpi_name || 'KPI').replace(/Scorecard/g,'').trim() || 'KPI';
-        return '<span style="font-size:8px;padding:2px 8px;background:'+dim+';color:'+itemColor(k.status)+';border-radius:99px;border:1px solid '+border+'">'+nm+'</span>';
-      }).join('');
-      return '<div class="sc-perspective-card" style="--card-accent:'+accent+'">'+
-        '<div style="height:4px;background:'+accent+';border-radius:var(--radius-card) var(--radius-card) 0 0"></div>'+
-        '<div style="padding:16px 18px 14px">'+
-          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'+
-            '<div style="display:flex;align-items:center;gap:9px">'+
-              '<div style="width:36px;height:36px;border-radius:10px;background:'+dim+';border:1px solid '+border+';display:flex;align-items:center;justify-content:center;font-size:18px">'+icon+'</div>'+
-              '<div>'+
-                '<div style="font-size:12px;font-weight:700;color:var(--text)">'+p+'</div>'+
-                '<div style="font-size:9px;color:var(--text3);font-family:\'DM Mono\',monospace">'+items.length+' Scorecards</div>'+
-              '</div>'+
-            '</div>'+
-            '<div style="text-align:right">'+
-              '<div style="font-size:26px;font-weight:800;color:'+c+';line-height:1">'+avgScore+'%</div>'+
-              '<div style="font-size:9px;color:'+c+'">'+lbl+'</div>'+
-            '</div>'+
-          '</div>'+
-          '<div style="height:6px;background:var(--surface);border-radius:99px;overflow:hidden;margin-bottom:12px"><div style="height:100%;width:'+Math.min(avgScore,100)+'%;background:'+c+';border-radius:99px;transition:width 1s ease-out"></div></div>'+
-          '<div style="display:flex;flex-direction:column;gap:3px;font-size:11px">'+kpis+'</div>'+
-          '<div style="margin-top:10px;display:flex;gap:5px;flex-wrap:wrap">'+pills+'</div>'+
-        '</div></div>';
-    }).join('');
-    var kpiTable = document.getElementById('kpi-table');
-    if (kpiTable) {
-      var top10 = scorecards.slice(0,10).map(function(k) {
-        return {
-          kpiName: k.kpi_name || 'KPI',
-          kpiValue: { target: k.target, actual: k.actual, status: k.status || 'Pending' }
-        };
-      });
-      kpiTable.innerHTML = '<thead><tr><th style="text-align:left;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">KPI</th><th style="text-align:left;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">Target</th><th style="text-align:left;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">Actual</th><th style="text-align:left;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);color:var(--text3);font-weight:600">Status</th></tr></thead><tbody>' + top10.map(function(kpi) { return '<tr><td style="padding:8px 14px;border-bottom:1px solid var(--border)"><strong>' + (kpi.kpiName) + '</strong></td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">' + (kpi.kpiValue.target ?? '—') + '</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)">' + (kpi.kpiValue.actual ?? '—') + '</td><td style="padding:8px 14px;border-bottom:1px solid var(--border)"><span class="tag ' + (kpi.kpiValue.status === 'on-track' || kpi.kpiValue.status === 'on track' ? 'tag-green' : 'tag-red') + '">' + kpi.kpiValue.status + '</span></td></tr>'; }).join('') + '</tbody>';
+    if (typeof window.loadScorecards === 'function') {
+      await window.loadScorecards();
+      window._scorecardHydrated = true;
+      return true;
     }
-    window._scorecardHydrated = true;
-    return true;
+    return false;
   }
 
   // ── 5c. INJECT BUDGET DATA ──
@@ -21855,49 +22396,74 @@ if (document.readyState === 'loading') {
     }
 
     // ── Update Section Header ──
+    const pendingTasks = tasks.filter(t => t.status !== 'completed');
     const headerEl = document.querySelector('#view-tasks .section-label');
     const approveAllBtn = document.querySelector('#view-tasks .btn-primary');
     if (headerEl) {
-      headerEl.textContent = isMember
-        ? 'My Assigned Tasks — ' + tasks.length + ' task(s)'
-        : 'All Org Tasks — ' + tasks.length + ' tasks · ' + roleLabel;
+      headerEl.textContent = 'PENDING EXECUTIVE ACTIONS — ' + (pendingTasks.length || 0) + ' ITEMS REQUIRING APPROVAL';
     }
     if (approveAllBtn && isMember) {
       approveAllBtn.style.display = 'none';
     }
-    // Add Create Task button for admin/manager
+    if (approveAllBtn) {
+      approveAllBtn.onclick = function() { approveAll(); };
+    }
+
+    // Add Create Task button for admin/manager if not present
     if (!isMember && approveAllBtn && !document.getElementById('task-create-btn')) {
       const createBtn = document.createElement('button');
       createBtn.id = 'task-create-btn';
       createBtn.className = 'btn btn-primary';
-      createBtn.style.cssText = 'margin-left:8px;padding:6px 14px;font-size:12px;';
+      createBtn.style.cssText = 'margin-left:8px;padding:6px 14px;font-size:12px;background:var(--surface,#1e293b);border:1px solid var(--border2,#334155);color:var(--text,#f8fafc);';
       createBtn.textContent = '+ Create Task';
       createBtn.onclick = function() { openTaskModal(null); };
       approveAllBtn.parentElement.insertBefore(createBtn, approveAllBtn.nextSibling);
     }
 
-    // ── Update Task Cards ──
+    // ── Render Pending Task Cards (Matching Baseline Architecture Screenshot) ──
     const list = document.getElementById('task-list');
     if (list) {
-      function prioClass(p) { return p === 'Critical' ? 'urgent' : p === 'High' ? 'in-progress' : 'pending'; }
-      function prioBadge(p) { return p === 'Critical' ? '🔴 Critical' : p === 'High' ? '🟠 High' : '🟡 Medium'; }
-      list.innerHTML = tasks.map(t =>
-        '<div class="task-card ' + prioClass(t.priority) + '" style="display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;">' +
-          '<div style="width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;background:var(--surface);color:var(--text3);flex-shrink:0;">' + (t.priority === 'Critical' ? '!' : '○') + '</div>' +
-          '<div style="flex:1;min-width:0;">' +
-            '<div style="font-weight:600;font-size:13px;color:var(--text);">' + (t.title || '') + '</div>' +
-            '<div style="display:flex;gap:8px;margin-top:4px;font-size:11px;color:var(--text3);">' +
-              '<span>⟡ ' + (t.agent || 'User Task') + '</span>' +
-              '<span>' + prioBadge(t.priority) + '</span>' +
-              '<span>👤 ' + (t.owner || userName) + '</span>' +
-              '<span>📅 ' + (t.due_date || 'No due date') + '</span>' +
+      if (!pendingTasks.length) {
+        list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;background:var(--bg2,#0f172a);border:1px solid var(--border,#1e293b);border-radius:12px;">✅ All executive action items have been approved and completed in MySQL DB.</div>';
+      } else {
+        list.innerHTML = pendingTasks.map(t => {
+          const priority = t.priority || 'Medium';
+          const isUrgent = priority === 'Critical';
+          const isHigh = priority === 'High';
+          const isMedium = priority === 'Medium';
+          const borderColor = isUrgent ? '#ef4444' : isHigh ? '#f59e0b' : '#3b82f6';
+          const cardClass = isUrgent ? 'task-card urgent' : isHigh ? 'task-card in-progress' : 'task-card pending';
+          
+          const agentLabel = t.agent || t.source_module || (isUrgent ? 'Risk Agent' : isHigh ? 'Finance Agent' : 'Strategy Agent');
+          const roleBadge = t.csuite || t.role || (isUrgent ? 'CRO, CIO' : isHigh ? 'CFO' : 'COO');
+          const dateBadge = t.due_date || t.dueDate || 'Today';
+
+          const prioBadgeHtml = isUrgent ? '🔴 Critical' : isHigh ? '🟠 High' : '🟡 Medium';
+          const iconHtml = isUrgent 
+            ? '<div class="task-check" onclick="toggleTask(this)" style="font-weight:800;color:#ef4444;border-color:#ef4444;">!</div>' 
+            : '<div class="task-check" onclick="toggleTask(this)"></div>';
+
+          return '<div class="' + cardClass + '" style="border-left:4px solid ' + borderColor + ';display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--bg2,#0f172a);border-top:1px solid var(--border,#1e293b);border-right:1px solid var(--border,#1e293b);border-bottom:1px solid var(--border,#1e293b);border-radius:10px;margin-bottom:10px;">' +
+            '<div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;">' +
+              iconHtml +
+              '<div class="task-body" style="flex:1;min-width:0;">' +
+                '<div class="task-title" style="font-size:13px;font-weight:600;color:var(--text,#f8fafc);margin-bottom:6px;">' + esc(t.title || t.Name || t.task_name || 'Task Item') + '</div>' +
+                '<div class="task-meta" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--text3,#94a3b8);">' +
+                  '<span>✧ ' + esc(agentLabel) + '</span>' +
+                  '<span>' + prioBadgeHtml + '</span>' +
+                  '<span>👤 ' + esc(roleBadge) + '</span>' +
+                  '<span>📅 ' + esc(dateBadge) + '</span>' +
+                '</div>' +
+              '</div>' +
             '</div>' +
-          '</div>' +
-          '<span style="font-size:10px;padding:3px 8px;border-radius:99px;background:var(--surface);border:1px solid var(--border);color:var(--text3)">' + (t.status || 'pending') + '</span>' +
-          (!isMember ? '<button onclick=\'openTaskModal(' + JSON.stringify({id:t.id,title:t.title,description:t.description,priority:t.priority,status:t.status,due_date:t.due_date}).replace(/'/g,"&#39;") + ')\' style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text2);font-size:11px;cursor:pointer;flex-shrink:0;">Edit</button>' : '') +
-          (isAdmin ? '<button onclick="deleteTask(' + t.id + ',\'' + (t.title||'').replace(/'/g,"\\'") + '\')" style="padding:4px 10px;border:1px solid var(--red-border);border-radius:6px;background:var(--red-dim);color:var(--red);font-size:11px;cursor:pointer;flex-shrink:0;">Delete</button>' : '') +
-        '</div>'
-      ).join('');
+            '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">' +
+              '<button class="btn btn-primary" style="font-size:12px;font-weight:700;padding:7px 18px;border-radius:8px;background:#0091ff;color:#fff;border:none;cursor:pointer;box-shadow:0 3px 10px rgba(0,145,255,0.3);" onclick="approveTask(this, ' + t.id + ')">Approve</button>' +
+              (!isMember ? '<button onclick=\'openTaskModal(' + JSON.stringify({id:t.id,title:t.title||t.Name||t.task_name,description:t.description,priority:t.priority,status:t.status,due_date:t.due_date||t.dueDate}).replace(/'/g,"&#39;") + ')\' style="padding:7px 12px;border:1px solid var(--border,#334155);border-radius:8px;background:var(--surface,#1e293b);color:var(--text2,#cbd5e1);font-size:11px;cursor:pointer;">Edit</button>' : '') +
+              (isAdmin ? '<button onclick="deleteTask(' + t.id + ',\'' + (t.title||t.Name||t.task_name||'').replace(/'/g,"\\'") + '\')" style="padding:7px 12px;border:1px solid var(--red-border);border-radius:8px;background:var(--red-dim);color:var(--red);font-size:11px;cursor:pointer;">Delete</button>' : '') +
+            '</div>' +
+          '</div>';
+        }).join('');
+      }
     }
 
     // ── Compute Task Stats ──
@@ -21913,7 +22479,7 @@ if (document.readyState === 'loading') {
     const signalsContainer = document.querySelector('#view-tasks .ai-signal-item.sig-red')?.parentElement;
     if (signalsContainer) {
       signalsContainer.innerHTML =
-        '<div class="ai-signal-item sig-red"><div class="ai-signal-dot" style="background:var(--red)"></div><div><strong>' + criticalCount + ' Critical Tasks:</strong> ' + (criticalCount > 0 ? 'Requires immediate attention. ' + tasks.filter(t => t.priority === 'Critical').map(t => t.title.substring(0,40)).join(', ').substring(0,80) : 'No critical tasks. All clear.') + '</div></div>' +
+        '<div class="ai-signal-item sig-red"><div class="ai-signal-dot" style="background:var(--red)"></div><div><strong>' + criticalCount + ' Critical Tasks:</strong> ' + (criticalCount > 0 ? 'Requires immediate attention. ' + tasks.filter(t => t.priority === 'Critical').map(t => (t.title||t.Name||'Task').substring(0,40)).join(', ').substring(0,80) : 'No critical tasks. All clear.') + '</div></div>' +
         '<div class="ai-signal-item sig-amber"><div class="ai-signal-dot" style="background:var(--amber)"></div><div><strong>' + pending + ' Pending:</strong> ' + (pending > 0 ? pending + ' tasks awaiting action. ' + highCount + ' high priority items.' : 'No pending tasks.') + '</div></div>' +
         '<div class="ai-signal-item sig-green"><div class="ai-signal-dot" style="background:var(--green)"></div><div><strong>' + completionRate + '% Completion Rate:</strong> ' + completed + ' of ' + total + ' tasks completed.' + (completionRate >= 80 ? ' On target.' : ' Below target — review pending items.') + '</div></div>' +
         '<div class="ai-signal-item sig-blue"><div class="ai-signal-dot" style="background:var(--blue2)"></div><div><strong>' + inProgress + ' In Progress:</strong> Active tasks being worked on. ' + (isMember ? 'Update progress on your assigned tasks.' : 'Monitor task execution across the team.') + '</div></div>';
@@ -21924,13 +22490,53 @@ if (document.readyState === 'loading') {
     if (recsContainer && criticalCount > 0) {
       const critTask = tasks.find(t => t.priority === 'Critical');
       recsContainer.innerHTML =
-        '<div style="padding:8px 10px;background:var(--red-dim);border:1px solid var(--red-border);border-radius:8px;margin-bottom:5px"><div style="font-size:10px;font-weight:700;color:var(--red);margin-bottom:2px;font-family:monospace">🔴 CRITICAL · ' + roleLabel + '</div><div style="font-size:12px;color:var(--text2)">' + (critTask ? critTask.title : 'No critical tasks') + '</div></div>' +
+        '<div style="padding:8px 10px;background:var(--red-dim);border:1px solid var(--red-border);border-radius:8px;margin-bottom:5px"><div style="font-size:10px;font-weight:700;color:var(--red);margin-bottom:2px;font-family:monospace">🔴 CRITICAL · ' + roleLabel + '</div><div style="font-size:12px;color:var(--text2)">' + (critTask ? (critTask.title||critTask.Name) : 'No critical tasks') + '</div></div>' +
         '<div style="padding:8px 10px;background:var(--amber-dim);border:1px solid var(--amber-border);border-radius:8px;margin-bottom:5px"><div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:2px;font-family:monospace">🟠 PENDING · ' + roleLabel + '</div><div style="font-size:12px;color:var(--text2)">' + pending + ' tasks pending action. Focus on high-priority items first.</div></div>' +
         '<div style="padding:8px 10px;background:var(--green-dim);border:1px solid var(--green-border);border-radius:8px"><div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:2px;font-family:monospace">✅ DONE · ' + roleLabel + '</div><div style="font-size:12px;color:var(--text2)">' + completed + ' tasks completed. ' + (completionRate >= 80 ? 'Strong progress.' : 'Room for improvement.') + '</div></div>';
     }
 
     return true;
   }
+
+  // ── Global Approve Handlers ──
+  window.approveAll = async function() {
+    const btn = document.querySelector('#view-tasks .btn-primary');
+    if (btn) { btn.disabled = true; btn.textContent = 'Approving All...'; }
+    try {
+      const resp = await window.authFetch('/tasks/approve-all', { method: 'POST' });
+      if (resp.ok) {
+        const toast = document.createElement('div');
+        toast.textContent = '✅ All pending executive tasks approved successfully';
+        toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:var(--green-dim);border:1px solid var(--green-border);color:var(--green);padding:10px 18px;border-radius:8px;font-size:12px;z-index:10000';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2500);
+        await hydrateTasksPage();
+      }
+    } catch(err) {
+      console.error('Approve all tasks failed:', err);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Approve All →'; }
+    }
+  };
+
+  window.approveTask = async function(btn, taskId) {
+    if (btn) { btn.disabled = true; btn.textContent = 'Approving...'; }
+    try {
+      const resp = await window.authFetch('/tasks/' + taskId + '/approve', { method: 'POST' });
+      if (resp.ok) {
+        const toast = document.createElement('div');
+        toast.textContent = '✅ Executive action task #' + taskId + ' approved';
+        toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:var(--green-dim);border:1px solid var(--green-border);color:var(--green);padding:10px 18px;border-radius:8px;font-size:12px;z-index:10000';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2500);
+        await hydrateTasksPage();
+      }
+    } catch(err) {
+      console.error('Approve task failed:', err);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Approve'; }
+    }
+  };
 
   // ── 5e. INJECT MEETINGS DATA ──
   async function hydrateMeetingsPage() {
@@ -23487,6 +24093,123 @@ return true;
 
 })();
 </script>
+
+  <!-- Create / Edit Org Structure Modal (Clean card design matching user reference screenshots) -->
+  <div id="orgModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,0.65);z-index:999999;align-items:center;justify-content:center;backdrop-filter:blur(4px);padding:20px;">
+    <div style="background:#ffffff;border-radius:16px;width:100%;max-width:720px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;font-family:'Trebuchet MS',system-ui,sans-serif;">
+      
+      <!-- Modal Header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid #f1f5f9;">
+        <div style="font-size:18px;font-weight:700;color:#0f172a;" id="orgModalTitle">Create Org Structure</div>
+        <button type="button" onclick="closeOrgModal()" style="background:none;border:none;color:#94a3b8;font-size:22px;cursor:pointer;line-height:1;padding:4px;transition:color 0.15s ease;" onmouseover="this.style.color='#0f172a'" onmouseout="this.style.color='#94a3b8'">✕</button>
+      </div>
+
+      <!-- Modal Form Body (2-Column Grid matching reference screenshots) -->
+      <form id="orgModalForm" onsubmit="saveOrgModal(event)" style="padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:16px 20px;">
+        <input type="hidden" id="org-edit-id" value="" />
+
+        <!-- Row 1: Employee ID & Department -->
+        <div>
+          <label style="display:block;font-size:13px;font-weight:600;color:#334155;margin-bottom:6px;">Employee Id</label>
+          <input type="text" id="org-input-empid" placeholder="Employee Id" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid #cbd5e1;background:#ffffff;color:#0f172a;font-size:13px;outline:none;" />
+        </div>
+
+        <div>
+          <label style="display:block;font-size:13px;font-weight:600;color:#334155;margin-bottom:6px;">Department</label>
+          <input type="text" id="org-input-dept" placeholder="Department" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid #cbd5e1;background:#ffffff;color:#0f172a;font-size:13px;outline:none;" />
+        </div>
+
+        <!-- Row 2: Department ID & Owner -->
+        <div>
+          <label style="display:block;font-size:13px;font-weight:600;color:#334155;margin-bottom:6px;">Department ID</label>
+          <input type="text" id="org-input-deptcode" placeholder="Department ID" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid #cbd5e1;background:#ffffff;color:#0f172a;font-size:13px;outline:none;" />
+        </div>
+
+        <div>
+          <label style="display:block;font-size:13px;font-weight:600;color:#334155;margin-bottom:6px;">Owner</label>
+          <select id="org-select-owner" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid #cbd5e1;background:#ffffff;color:#0f172a;font-size:13px;outline:none;">
+            <option value="">Select Owner</option>
+          </select>
+        </div>
+
+        <!-- Row 3: Email & Members -->
+        <div>
+          <label style="display:block;font-size:13px;font-weight:600;color:#334155;margin-bottom:6px;">Email</label>
+          <input type="email" id="org-input-email" placeholder="Email ID" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid #cbd5e1;background:#ffffff;color:#0f172a;font-size:13px;outline:none;" />
+        </div>
+
+        <div>
+          <label style="display:block;font-size:13px;font-weight:600;color:#334155;margin-bottom:6px;">Members</label>
+          <input type="text" id="org-input-name" placeholder="Select Member" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid #cbd5e1;background:#ffffff;color:#0f172a;font-size:13px;outline:none;" required />
+        </div>
+
+        <!-- Row 4: Scorecard & Initiative -->
+        <div>
+          <label style="display:block;font-size:13px;font-weight:600;color:#334155;margin-bottom:6px;">Scorecard</label>
+          <select id="org-select-scorecard" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid #cbd5e1;background:#ffffff;color:#0f172a;font-size:13px;outline:none;">
+            <option value="">Select Scorecard</option>
+            <option value="sc_financial">💰 Financial Performance</option>
+            <option value="sc_customer">👥 Customer &amp; Market</option>
+            <option value="sc_ops">⚙️ Manufacturing &amp; Ops</option>
+            <option value="sc_projects">🏗️ Capital Projects</option>
+            <option value="sc_esg">🌿 Governance &amp; ESG</option>
+            <option value="sc_people">📚 People &amp; Capability</option>
+          </select>
+        </div>
+
+        <div>
+          <label style="display:block;font-size:13px;font-weight:600;color:#334155;margin-bottom:6px;">Initiative</label>
+          <select id="org-select-initiative" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid #cbd5e1;background:#ffffff;color:#0f172a;font-size:13px;outline:none;">
+            <option value="">Select Initiative</option>
+            <option value="init_kisaju">🏗️ Kisaju Expansion Project</option>
+            <option value="init_dt">💻 Digital Transformation</option>
+            <option value="init_esg">🌿 Net Zero 2030 ESG</option>
+            <option value="init_talent">📚 Strategic Talent Retention</option>
+          </select>
+        </div>
+
+        <!-- Row 5: KPI & Risk -->
+        <div>
+          <label style="display:block;font-size:13px;font-weight:600;color:#334155;margin-bottom:6px;">KPI</label>
+          <select id="org-select-kpi" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid #cbd5e1;background:#ffffff;color:#0f172a;font-size:13px;outline:none;">
+            <option value="">Select KPI</option>
+            <option value="kpi_rev">📈 Revenue Growth Rate</option>
+            <option value="kpi_ebitda">💰 EBITDA Margin</option>
+            <option value="kpi_oee">⚙️ Overall Equipment Effectiveness</option>
+            <option value="kpi_nps">👥 Customer Satisfaction Score</option>
+          </select>
+        </div>
+
+        <div>
+          <label style="display:block;font-size:13px;font-weight:600;color:#334155;margin-bottom:6px;">Risk</label>
+          <select id="org-select-risk" style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid #cbd5e1;background:#ffffff;color:#0f172a;font-size:13px;outline:none;">
+            <option value="">Select Risk</option>
+            <option value="risk_cyber">⚠️ Cyber Security Posture</option>
+            <option value="risk_talent">⚠️ Key Talent Attrition</option>
+            <option value="risk_supply">⚠️ Supply Chain Disruption</option>
+          </select>
+        </div>
+
+        <!-- Footer Action Buttons -->
+        <div style="grid-column:1/-1;display:flex;justify-content:flex-end;gap:12px;margin-top:10px;padding-top:20px;border-top:1px solid #f1f5f9;">
+          <button type="button" onclick="closeOrgModal()" style="padding:10px 22px;border-radius:8px;border:none;background:#e2e8f0;color:#475569;font-weight:600;font-size:14px;cursor:pointer;transition:background 0.15s ease;">Cancel</button>
+          <button type="submit" id="org-modal-submit-btn" style="padding:10px 26px;border-radius:8px;border:none;background:#0091ff;color:#ffffff;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 4px 14px rgba(0,145,255,0.35);transition:transform 0.15s ease;">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="orgDeleteModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,0.65);z-index:999999;align-items:center;justify-content:center;backdrop-filter:blur(4px);padding:20px;">
+    <div style="background:#ffffff;border-radius:16px;width:100%;max-width:440px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.3);font-family:'Trebuchet MS',system-ui,sans-serif;">
+      <div style="font-size:18px;font-weight:700;color:#0f172a;margin-bottom:10px;">Confirm Deletion</div>
+      <div style="font-size:14px;color:#475569;margin-bottom:24px;line-height:1.5;" id="orgDeleteMsg">Are you sure you want to delete this record?</div>
+      <div style="display:flex;justify-content:flex-end;gap:12px;">
+        <button type="button" onclick="closeOrgDeleteModal()" style="padding:10px 22px;border-radius:8px;border:none;background:#e2e8f0;color:#475569;font-weight:600;font-size:14px;cursor:pointer;">Cancel</button>
+        <button type="button" id="orgConfirmDeleteBtn" onclick="executeOrgDelete()" style="padding:10px 24px;border-radius:8px;border:none;background:#ef4444;color:#ffffff;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 4px 14px rgba(239,68,68,0.35);">Delete</button>
+      </div>
+    </div>
+  </div>
 
 </body>
 </html>

@@ -17,7 +17,7 @@ from app.services.java_bridge import bridge
 from app.routers import (
     auth, incidents, risks, predict, dashboard, scorecards, budgets,
     tasks, meetings, audit, complaints, compliance, swot, pestel_projects, org,
-    bcp, ai, initiatives, agents, ml, documents, compat, api_v1,
+    bcp, ai, initiatives, agents, ml, documents, compat, api_v1, decisions,
 )
 
 setup_logging(
@@ -27,12 +27,18 @@ setup_logging(
 
 logger = logging.getLogger("stratroom")
 
+from app.core.migrations import ensure_schema
+
 _start_time = time.time()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("StratRoom API starting — env=%s version=%s", settings.ENVIRONMENT, settings.APP_VERSION)
+    try:
+        await ensure_schema()
+    except Exception as e:
+        logger.warning("Startup schema check failed: %s", e)
     yield
     await bridge.close()
     logger.info("StratRoom API shutting down")
@@ -142,6 +148,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 app.include_router(auth.router)
 app.include_router(incidents.router)
+app.include_router(decisions.router)
 app.include_router(risks.router)
 app.include_router(predict.router)
 app.include_router(dashboard.router)

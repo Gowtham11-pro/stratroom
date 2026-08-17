@@ -16,12 +16,17 @@ files = [
     "backend/app/agents/risk_tools.py",
     "backend/app/agents/scorecard_tools.py",
     "backend/app/agents/task_tools.py",
+    "backend/app/agents/incident_tools.py",
+    "backend/app/agents/decision_tools.py",
+    "backend/app/agents/initiative_tools.py",
     "backend/app/agents/tools.py",
     "backend/app/core/config.py",
     "backend/app/core/db.py",
     "backend/app/core/deps.py",
     "backend/app/core/security.py",
+    "backend/app/core/rbac.py",
     "backend/app/core/utils.py",
+    "backend/app/core/migrations.py",
     "backend/app/routers/agents.py",
     "backend/app/routers/ai.py",
     "backend/app/routers/api_v1.py",
@@ -35,6 +40,7 @@ files = [
     "backend/app/routers/dashboard.py",
     "backend/app/routers/documents.py",
     "backend/app/routers/incidents.py",
+    "backend/app/routers/decisions.py",
     "backend/app/routers/initiatives.py",
     "backend/app/routers/meetings.py",
     "backend/app/routers/org.py",
@@ -44,6 +50,8 @@ files = [
     "backend/app/routers/swot.py",
     "backend/app/routers/tasks.py",
     "backend/app/services/java_bridge.py",
+    "backend/app/services/monte_carlo.py",
+    "backend/app/ai/tokens.py",
     "backend/app/ai/llm_providers.py",
     "backend/app/ai/metrics.py",
     "backend/app/ai/memory.py",
@@ -102,15 +110,18 @@ if ec != 0:
     print(f"  FAIL: docker compose build failed (exit={ec}): {err}")
     sys.exit(1)
 
-print("\n=== Step 4: Copy frontend to Apache doc root ===")
-apache_cmd = f"cp {BASE}/frontend/31may_index.html /var/www/stratroom-ai/index.html"
+print("\n=== Step 4: Copy frontend to Apache doc root and container ===")
+apache_cmd = (
+    f"cp {BASE}/frontend/31may_index.html /var/www/stratroom-ai/index.html && "
+    f"docker cp {BASE}/frontend/31may_index.html $(docker ps -q -f name=api | head -n 1):/app/frontend/31may_index.html 2>/dev/null || true"
+)
 stdin, stdout, stderr = client.exec_command(apache_cmd)
 ec = stdout.channel.recv_exit_status()
 if ec != 0:
     err = stderr.read().decode().strip()[:120]
     print(f"  FAIL: {err}")
     sys.exit(1)
-print("  OK: Copied 31may_index.html to /var/www/stratroom-ai/index.html")
+print("  OK: Copied 31may_index.html to Apache doc root and API container")
 
 print("\n=== Step 5: Wait for container health ===")
 time.sleep(10)

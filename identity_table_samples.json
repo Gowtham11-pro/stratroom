@@ -1,0 +1,237 @@
+{
+  "employee_details": [
+    {
+      "emp_id": "958",
+      "org_id": "3",
+      "dept_id": "1",
+      "first_name": "Super User",
+      "last_name": "",
+      "title": "Superuser",
+      "email_address": "superuser@domain.com",
+      "status": "Active",
+      "department": "testdomain",
+      "parent_emp_id": "0"
+    },
+    {
+      "emp_id": "1157",
+      "org_id": "4",
+      "dept_id": "2",
+      "first_name": "SuperUser",
+      "last_name": "",
+      "title": "Superuser",
+      "email_address": "superuser@demo.com",
+      "status": "Inactive",
+      "department": "testdemo",
+      "parent_emp_id": "0"
+    },
+    {
+      "emp_id": "1656",
+      "org_id": "3",
+      "dept_id": "559",
+      "first_name": "Thor",
+      "last_name": "",
+      "title": "CEO",
+      "email_address": "Thor@domain.com",
+      "status": "Active",
+      "department": "CEO",
+      "parent_emp_id": "0"
+    },
+    {
+      "emp_id": "1657",
+      "org_id": "3",
+      "dept_id": "512",
+      "first_name": "James Bond",
+      "last_name": "",
+      "title": "COO",
+      "email_address": "james.bond@domain.com",
+      "status": "Active",
+      "department": "COO",
+      "parent_emp_id": "1656"
+    },
+    {
+      "emp_id": "1658",
+      "org_id": "3",
+      "dept_id": "513",
+      "first_name": "Robert Downey",
+      "last_name": "",
+      "title": "Chief Financial Officer",
+      "email_address": "robert.downey@domain.com",
+      "status": "Active",
+      "department": "Finance",
+      "parent_emp_id": "1657"
+    },
+    {
+      "emp_id": "1659",
+      "org_id": "3",
+      "dept_id": "514",
+      "first_name": "Halle Berry",
+      "last_name": "",
+      "title": "Chief Technology Officer",
+      "email_address": "halle.berry@domain.com",
+      "status": "Active",
+      "department": "Technology",
+      "parent_emp_id": "1657"
+    },
+    {
+      "emp_id": "1661",
+      "org_id": "3",
+      "dept_id": "558",
+      "first_name": "Hemsworth",
+      "last_name": "",
+      "title": "CSO",
+      "email_address": "liam.hemsworth@domain.com",
+      "status": "Active",
+      "department": "Sales",
+      "parent_emp_id": "1657"
+    },
+    {
+      "emp_id": "1662",
+      "org_id": "3",
+      "dept_id": "513",
+      "first_name": "KENNY",
+      "last_name": "",
+      "title": "Budget Planner",
+      "email_address": "kenny@domain.com",
+      "status": "Active",
+      "department": "Finance",
+      "parent_emp_id": "1658"
+    },
+    {
+      "emp_id": "1663",
+      "org_id": "3",
+      "dept_id": "513",
+      "first_name": "HEIDI",
+      "last_name": "",
+      "title": "Accounting",
+      "email_address": "heidi@domain.com",
+      "status": "Active",
+      "department": "Finance",
+      "parent_emp_id": "1658"
+    },
+    {
+      "emp_id": "1664",
+      "org_id": "3",
+      "dept_id": "558",
+      "first_name": "JOHN",
+      "last_name": "",
+      "title": "Sales - America",
+      "email_address": "john@domain.com",
+      "status": "Active",
+      "department": "Sales",
+      "parent_emp_id": "1661"
+    }
+  ],
+  "user_role_management": [
+    {
+      "id": "958",
+      "emp_id": "0",
+      "org_id": "3",
+      "name": "Super User",
+      "email_address": "superuser@domain.com",
+      "designation": "",
+      "role": "-",
+      "department": "2022-03-04 04:45:45",
+      "status": "958"
+    },
+    {
+      "id": "1157",
+      "emp_id": "0",
+      "org_id": "4",
+      "name": "SuperUser",
+      "email_address": "superuser@demo.com",
+      "designation": "",
+      "role": "-",
+      "department": "2026-01-02 04:11:10",
+      "status": "1157"
+    },
+    {
+      "id": "1656",
+      "emp_id": "0",
+      "org_id": "3",
+      "name": "Thor",
+      "email_address": "Thor@domain.com",
+      "designation": "",
+      "role": "2022-04-25 03:46:19",
+      "department": "2022-12-05 05:01:58",
+      "status": "958"
+    },
+    {
+      "id": "1657",
+      "emp_id": "0",
+      "org_id": "3",
+      "name": "James Bond",
+      "email_address": "james.bond@domain.com",
+      "designation": "",
+      "role": "2022-04-25 03:46:20",
+      "department": "2022-12-05 05:01:58",
+      "status": "958"
+    },
+    {
+      "id": "1658",
+      "emp_id": "0",
+      "org_id": "3",
+      "name": "Robert Downey",
+      "email_address": "robert.downey@domain.com",
+      "designation": "",
+      "role": "2022-04-25 03:46:20",
+      "department": "2022-12-05 05:01:58",
+      "status": "958"
+    },
+    {
+      "id": "1659",
+      "emp_id": "0",
+      "org_id": "3",
+      "name": "Halle Berry",
+      "email_address": "halle.berry@domain.com",
+      "designation": "",
+      "role": "2022-04-25 03:46:20",
+      "department": "2022-12-21 09:15:04",
+      "status": "958"
+    },
+    {
+      "id": "1661",
+      "emp_id": "0",
+      "org_id": "3",
+      "name": "Hemsworth",
+      "email_address": "liam.hemsworth@domain.com",
+      "designation": "",
+      "role": "2022-04-25 03:46:20",
+      "department": "2022-12-05 05:01:58",
+      "status": "958"
+    },
+    {
+      "id": "1662",
+      "emp_id": "0",
+      "org_id": "3",
+      "name": "KENNY",
+      "email_address": "kenny@domain.com",
+      "designation": "",
+      "role": "2022-04-25 03:46:20",
+      "department": "2023-05-12 09:27:46",
+      "status": "958"
+    },
+    {
+      "id": "1663",
+      "emp_id": "0",
+      "org_id": "3",
+      "name": "HEIDI",
+      "email_address": "heidi@domain.com",
+      "designation": "",
+      "role": "2022-04-25 03:46:20",
+      "department": "2022-12-23 03:55:35",
+      "status": "958"
+    },
+    {
+      "id": "1664",
+      "emp_id": "0",
+      "org_id": "3",
+      "name": "JOHN",
+      "email_address": "john@domain.com",
+      "designation": "-",
+      "role": "2022-04-25 03:46:20",
+      "department": "2022-12-09 04:27:40",
+      "status": "958"
+    }
+  ],
+  "users": []
+}

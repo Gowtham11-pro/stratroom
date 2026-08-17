@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("stratroom.agents.risk_tools")
 
+from app.agents.task_tools import DEFAULT_OWNER_EMAIL, find_similar_employees, resolve_owner_emp_id  # noqa: E402
+
 RISK_FIELDS = [
     "id", "name", "owner", "inherent_likelihood", "inherent_impact",
     "residual_likelihood", "residual_impact", "description", "mitigation",
@@ -39,7 +41,7 @@ async def query_risks(
     """
     from app.services.java_bridge import bridge
 
-    # 1. Resolve MySQL identity from email
+    # 1. Resolve MySQL identity from email (members only)
     mysql_user = None
     if email:
         rows = await bridge._mysql(
@@ -49,33 +51,41 @@ async def query_risks(
         )
         mysql_user = rows[0] if rows else None
 
-    if not mysql_user:
-        return {"risks": [], "summary": {
-            "total": 0, "heat_scores": [],
-            "critical_count": 0, "high_count": 0,
-        }}
+    # 2. Build query
+    if is_admin:
+        # Admins see all risks across orgs — mirrors the unscoped
+        # /riskListView the UI uses for admins. Skips the
+        # employee_details JOIN, which would silently drop risks whose
+        # owner emp_id has no employee_details row (orphan owners).
+        rows = await bridge._mysql(
+            "SELECT t.ID, t.risk_value, t.owner, t.status, t.created_time "
+            "FROM risk_details t "
+            "ORDER BY t.ID"
+        )
+    else:
+        if not mysql_user:
+            return {"risks": [], "summary": {
+                "total": 0, "heat_scores": [],
+                "critical_count": 0, "high_count": 0,
+            }}
 
-    mysql_org_id = mysql_user["org_id"]
-    emp_id = mysql_user["emp_id"]
+        mysql_org_id = mysql_user["org_id"]
+        emp_id = mysql_user["emp_id"]
 
-    # 2. Build query — org scoped via JOIN, always applied
-    where_clauses = ["e.org_id = %s"]
-    params = [mysql_org_id]
+        # Org + owner scoped via JOIN, always applied for members
+        where_clauses = ["e.org_id = %s", "t.owner = %s"]
+        params = [mysql_org_id, emp_id]
 
-    if not is_admin:
-        where_clauses.append("t.owner = %s")
-        params.append(emp_id)
+        where_sql = " AND ".join(where_clauses)
 
-    where_sql = " AND ".join(where_clauses)
-
-    rows = await bridge._mysql(
-        "SELECT t.ID, t.risk_value, t.owner, t.status, t.created_time "
-        "FROM risk_details t "
-        "JOIN employee_details e ON e.emp_id = t.owner "
-        f"WHERE {where_sql} "
-        "ORDER BY t.ID",
-        tuple(params),
-    )
+        rows = await bridge._mysql(
+            "SELECT t.ID, t.risk_value, t.owner, t.status, t.created_time "
+            "FROM risk_details t "
+            "JOIN employee_details e ON e.emp_id = t.owner "
+            f"WHERE {where_sql} "
+            "ORDER BY t.ID",
+            tuple(params),
+        )
 
     # 3. Resolve owner emp_ids to emails
     owner_ids = set(r.get("owner") for r in rows if r.get("owner"))
@@ -186,29 +196,44 @@ async def create_risk(
         )
         mysql_user = rows[0] if rows else None
 
-    if not mysql_user:
+    if mysql_user:
+        creator_org_id = mysql_user["org_id"]
+        creator_emp_id = mysql_user["emp_id"]
+    elif is_admin:
+        # Admins not present in employee_details fall back to the JWT org_id
+        creator_org_id = org_id
+        creator_emp_id = None
+    else:
         return {"error": "User not found in employee directory."}
 
-    creator_org_id = mysql_user["org_id"]
-    creator_emp_id = mysql_user["emp_id"]
-
-    # 2. Resolve task owner
+    # 2. Resolve risk owner
     if owner and owner.strip():
-        owner_rows = await bridge._mysql(
-            "SELECT emp_id, org_id FROM employee_details "
-            "WHERE LOWER(email_address) = LOWER(%s) LIMIT 1",
-            (owner.strip(),),
-        )
-        if not owner_rows:
-            return {"error": f"Owner '{owner}' not found in employee directory."}
+        owner_row = await resolve_owner_emp_id(bridge, owner)
+        if not owner_row:
+            suggestion = ""
+            matches = await find_similar_employees(bridge, owner)
+            if matches:
+                suggestion = " Did you mean: " + ", ".join(matches) + "?"
+            return {"error": f"Owner '{owner}' not found in the employee directory.{suggestion}"}
 
-        owner_emp_id = owner_rows[0]["emp_id"]
-        owner_org_id = owner_rows[0]["org_id"]
+        owner_emp_id = owner_row["emp_id"]
+        owner_org_id = owner_row["org_id"]
 
-        if owner_org_id != creator_org_id:
+        # Cross-org guard applies only when the creator has a resolvable
+        # employee org; admins outside the directory can assign anywhere.
+        if creator_emp_id is not None and owner_org_id != creator_org_id:
             return {"error": "Cannot assign risks to users outside your organization."}
     else:
-        owner_emp_id = creator_emp_id
+        if creator_emp_id is None:
+            # Directory-less admin: default to the fixed demo owner so the
+            # created risk is visible to real business users.
+            default_row = await resolve_owner_emp_id(bridge, DEFAULT_OWNER_EMAIL)
+            if default_row:
+                owner_emp_id = default_row["emp_id"]
+            else:
+                return {"error": "You are not in the employee directory. Please specify an owner=email@x.com to assign this risk to."}
+        else:
+            owner_emp_id = creator_emp_id
 
     # 3. Compute heat score (approximate — known to not match the
     #    undocumented frontend formula, but better than leaving blank)
@@ -306,20 +331,23 @@ async def update_risk(
 
     # 1. Resolve MySQL identity
     mysql_user = await _resolve_mysql_user(email)
-    if not mysql_user:
+    if mysql_user:
+        mysql_org_id = mysql_user["org_id"]
+        emp_id = mysql_user["emp_id"]
+    elif is_admin:
+        # Admins without an employee_details row operate unscoped by ID
+        mysql_org_id = None
+        emp_id = None
+    else:
         return {"error": "User not found in employee directory."}
-
-    mysql_org_id = mysql_user["org_id"]
-    emp_id = mysql_user["emp_id"]
 
     # 2. Read current risk with org/ownership verification
     if is_admin:
         rows = await bridge._mysql(
             "SELECT t.ID, t.risk_value, t.owner, t.status "
             "FROM risk_details t "
-            "JOIN employee_details e ON e.emp_id = t.owner "
-            "WHERE t.ID = %s AND e.org_id = %s",
-            (risk_id, mysql_org_id),
+            "WHERE t.ID = %s",
+            (risk_id,),
         )
     else:
         rows = await bridge._mysql(
@@ -332,7 +360,7 @@ async def update_risk(
 
     if not rows:
         if is_admin:
-            return {"error": f"Risk {risk_id} not found in your organization."}
+            return {"error": f"Risk {risk_id} not found."}
         return {"error": f"Risk {risk_id} is not yours. Only admins can update others' risks."}
 
     current = rows[0]
@@ -368,21 +396,35 @@ async def update_risk(
 
     # Check column fields
     if owner is not None:
-        # Resolve owner email -> emp_id
-        owner_rows = await bridge._mysql(
-            "SELECT emp_id, org_id FROM employee_details "
-            "WHERE LOWER(email_address) = LOWER(%s) LIMIT 1",
-            (owner.strip(),),
-        )
-        if not owner_rows:
-            return {"error": f"Owner '{owner}' not found in employee directory."}
-        if owner_rows[0]["org_id"] != mysql_org_id:
+        # Resolve owner email / full name / first name -> emp_id
+        owner_row = await resolve_owner_emp_id(bridge, owner)
+        if not owner_row:
+            suggestion = ""
+            matches = await find_similar_employees(bridge, owner)
+            if matches:
+                suggestion = " Did you mean: " + ", ".join(matches) + "?"
+            return {"error": f"Owner '{owner}' not found in the employee directory.{suggestion}"}
+        if mysql_org_id is not None and owner_row["org_id"] != mysql_org_id:
             return {"error": "Cannot reassign risks to users outside your organization."}
-        updated_cols["owner"] = owner_rows[0]["emp_id"]
+        updated_cols["owner"] = owner_row["emp_id"]
 
     warnings: list[str] = []
+    if residual_likelihood is not None:
+        rl_text = _LIKELIHOOD_MAP.get(residual_likelihood, "Low")
+        rv["resLikelihood"] = rl_text
+        rv["residualLikelihood"] = residual_likelihood
+        json_changed = True
+    if residual_impact is not None:
+        ri_text = _IMPACT_MAP.get(residual_impact, "Low")
+        rv["resImpact"] = ri_text
+        rv["residualImpact"] = residual_impact
+        json_changed = True
+
     if residual_likelihood is not None or residual_impact is not None:
-        warnings.append("residual_likelihood/residual_impact are not stored in this system and were ignored.")
+        rl_num = residual_likelihood if residual_likelihood is not None else int(rv.get("residualLikelihood", 2))
+        ri_num = residual_impact if residual_impact is not None else int(rv.get("residualImpact", 2))
+        rv["residualScore"] = str(rl_num * ri_num)
+        json_changed = True
 
     if not json_changed and not updated_cols:
         return {"error": "No fields to update.", "action": "no_change"}
@@ -402,15 +444,14 @@ async def update_risk(
         rv["riskStatus"] = _score_to_riskstatus(heat)
         json_changed = True
 
-    # 5. Apply updates — TOCTOU-safe: org/owner repeated in WHERE
+    # 5. Apply updates — TOCTOU-safe: owner scoping repeated in WHERE
     if json_changed:
         if is_admin:
             await bridge._mysql_write(
                 "UPDATE risk_details t "
-                "JOIN employee_details e ON e.emp_id = t.owner "
                 "SET t.risk_value = %s, t.updated_time = NOW() "
-                "WHERE t.ID = %s AND e.org_id = %s",
-                (json.dumps(rv), risk_id, mysql_org_id),
+                "WHERE t.ID = %s",
+                (json.dumps(rv), risk_id),
             )
         else:
             await bridge._mysql_write(
@@ -424,17 +465,16 @@ async def update_risk(
     if updated_cols:
         set_items = ", ".join(f"{k} = %s" for k in updated_cols)
         set_items += ", updated_time = NOW()"
-        col_params = list(updated_cols.values()) + [risk_id, mysql_org_id]
+        col_params = list(updated_cols.values()) + [risk_id]
         if is_admin:
             await bridge._mysql_write(
                 f"UPDATE risk_details t "
-                f"JOIN employee_details e ON e.emp_id = t.owner "
                 f"SET {set_items} "
-                f"WHERE t.ID = %s AND e.org_id = %s",
+                f"WHERE t.ID = %s",
                 tuple(col_params),
             )
         else:
-            col_params.append(emp_id)
+            col_params += [mysql_org_id, emp_id]
             await bridge._mysql_write(
                 f"UPDATE risk_details t "
                 f"JOIN employee_details e ON e.emp_id = t.owner "
@@ -477,28 +517,47 @@ async def delete_risk(
     from app.services.java_bridge import bridge
 
     mysql_user = await _resolve_mysql_user(email)
-    if not mysql_user:
+    if mysql_user:
+        mysql_org_id = mysql_user["org_id"]
+    elif is_admin:
+        # Admins without an employee_details row operate unscoped by ID
+        mysql_org_id = None
+    else:
         return {"error": "User not found in employee directory."}
 
-    mysql_org_id = mysql_user["org_id"]
-
-    # Pre-check: verify risk exists in this org
-    rows = await bridge._mysql(
-        "SELECT t.ID FROM risk_details t "
-        "JOIN employee_details e ON e.emp_id = t.owner "
-        "WHERE t.ID = %s AND e.org_id = %s",
-        (risk_id, mysql_org_id),
-    )
+    # Pre-check: verify risk exists
+    if is_admin:
+        rows = await bridge._mysql(
+            "SELECT t.ID FROM risk_details t "
+            "WHERE t.ID = %s",
+            (risk_id,),
+        )
+    else:
+        rows = await bridge._mysql(
+            "SELECT t.ID FROM risk_details t "
+            "JOIN employee_details e ON e.emp_id = t.owner "
+            "WHERE t.ID = %s AND e.org_id = %s",
+            (risk_id, mysql_org_id),
+        )
     if not rows:
+        if is_admin:
+            return {"error": f"Risk {risk_id} not found."}
         return {"error": f"Risk {risk_id} not found in your organization."}
 
     # Hard delete — independently scoped
-    await bridge._mysql_write(
-        "DELETE t FROM risk_details t "
-        "JOIN employee_details e ON e.emp_id = t.owner "
-        "WHERE t.ID = %s AND e.org_id = %s",
-        (risk_id, mysql_org_id),
-    )
+    if is_admin:
+        await bridge._mysql_write(
+            "DELETE FROM risk_details t "
+            "WHERE t.ID = %s",
+            (risk_id,),
+        )
+    else:
+        await bridge._mysql_write(
+            "DELETE t FROM risk_details t "
+            "JOIN employee_details e ON e.emp_id = t.owner "
+            "WHERE t.ID = %s AND e.org_id = %s",
+            (risk_id, mysql_org_id),
+        )
 
     logger.info("Risk deleted: id=%d org=%s", risk_id, mysql_org_id)
     return {
@@ -524,3 +583,35 @@ def format_risk_list(risks: list[dict]) -> str:
             f"| Mitigation: {r.get('mitigation', '—')[:60]}"
         )
     return "\n".join(lines)
+
+
+async def risk_simulator(
+    db: AsyncSession,
+    user_id: int,
+    org_id: int,
+    runs: int = 10000,
+    confidence: float = 0.95,
+    is_admin: bool = False,
+    email: str | None = None,
+) -> dict:
+    """Run a correlated Monte Carlo risk simulation across active risks in MySQL."""
+    from app.services.java_bridge import bridge
+    from app.services.monte_carlo import parse_risk, run_simulation
+
+    rows = await bridge._mysql("SELECT t.ID, t.risk_value, t.owner, t.status FROM risk_details t ORDER BY t.ID")
+
+    modelable = []
+    for row in rows:
+        parsed = parse_risk(row)
+        if parsed:
+            modelable.append(parsed)
+
+    if not modelable:
+        return {"error": "No modelable risks found for simulation."}
+
+    try:
+        sim_res = run_simulation(modelable, runs=runs, confidence=confidence)
+        return sim_res
+    except Exception as exc:
+        return {"error": str(exc)}
+

@@ -4,6 +4,8 @@ import time
 
 import httpx
 
+from app.core.config import settings
+
 logger = logging.getLogger("stratroom.ai.llm")
 
 
@@ -44,6 +46,8 @@ PROVIDER_ENDPOINTS = {
     "anthropic": "https://api.anthropic.com/v1/messages",
     "google": "generativelanguage.googleapis.com",
     "ollama": "localhost:11434",
+    "qwen": "https://api.together.xyz/v1/chat/completions",
+    "qwen2.5": "https://api.together.xyz/v1/chat/completions",
 }
 
 DEFAULT_TIMEOUT = 120
@@ -87,6 +91,21 @@ def _extract_provider_error(resp: httpx.Response, provider: str, model: str) -> 
     return ValueError(msg)
 
 
+def _clamp_max_tokens(max_tokens: int) -> int:
+    """Clamp a caller-supplied max_tokens to the configured global ceiling.
+
+    Prevents any single agent/route from requesting an unbounded (or overly
+    generous) response budget that would spike token consumption.
+    """
+    if not isinstance(max_tokens, int) or max_tokens < 1:
+        max_tokens = 2048
+    ceiling = settings.MAX_LLM_MAX_TOKENS
+    if max_tokens > ceiling:
+        logger.info("max_tokens clamped %d -> %d", max_tokens, ceiling)
+        max_tokens = ceiling
+    return max_tokens
+
+
 async def call_llm(
     provider: str,
     api_key: str,
@@ -113,21 +132,29 @@ async def call_llm(
         Response text string.
     """
     provider = provider.lower()
+    max_tokens = _clamp_max_tokens(max_tokens)
 
     if provider == "mock":
         return "Mock response. This is a simulated LLM reply for testing purposes. The agent system is functioning correctly through the full HTTP path."
     if provider == "anthropic":
-        return await _call_anthropic(api_key, model, system_prompt, messages, max_tokens, base_url)
+        text = await _call_anthropic(api_key, model, system_prompt, messages, max_tokens, base_url)
     elif provider == "google":
-        return await _call_google(api_key, model, system_prompt, messages, base_url)
+        text = await _call_google(api_key, model, system_prompt, messages, base_url)
     elif provider == "ollama":
         endpoint = ollama_endpoint or base_url or api_key or "http://localhost:11434"
         endpoint = _normalize_ollama_endpoint(endpoint)
-        return await _call_ollama(endpoint, model, system_prompt, messages)
+        text = await _call_ollama(endpoint, model, system_prompt, messages)
     elif provider in PROVIDER_ENDPOINTS:
-        return await _call_openai_compatible(provider, api_key, model, system_prompt, messages, max_tokens, base_url)
+        text = await _call_openai_compatible(provider, api_key, model, system_prompt, messages, max_tokens, base_url)
     else:
         raise ValueError(f"Unknown provider: {provider}")
+
+    # Global output cap — enforced at the provider boundary so every route and
+    # every agent benefits, regardless of whether the caller remembered.
+    from app.ai.tokens import cap_response
+
+    capped, _truncated = cap_response(text)
+    return capped
 
 
 async def call_llm_with_retry(
@@ -178,6 +205,9 @@ async def _call_openai_compatible(
     system_prompt: str, messages: list[dict], max_tokens: int,
     base_url: str | None = None,
 ) -> str:
+    if provider in ("qwen", "qwen2.5"):
+        if not model or model.lower() in ("qwen", "qwen2.5"):
+            model = "Qwen/Qwen2.5-72B-Instruct-Turbo"
     if base_url:
         url = base_url.rstrip("/") + "/chat/completions"
     else:

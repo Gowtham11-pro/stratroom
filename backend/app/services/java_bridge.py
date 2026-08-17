@@ -80,6 +80,9 @@ class JavaBridge:
 
     def _route_db_get(self, path: str, params: dict | None = None) -> tuple[str | None, tuple]:
         """Return (SQL, params_tuple) for a known GET path, or (None, ()) to fall through to HTTP."""
+        if re.match(r"^/risk/\d+$", path):
+            risk_id = path.split("/")[-1]
+            return "SELECT ID, risk_value, active, owner, created_time, updated_time, page_id, status FROM risk_details WHERE ID = %s", (risk_id,)
         if path == "/riskListView":
             return "SELECT ID, risk_value, active, owner, created_time, updated_time, page_id, status FROM risk_details ORDER BY created_time DESC", ()
         if path.startswith("/riskList/"):
@@ -89,12 +92,17 @@ class JavaBridge:
             return "SELECT id, budgetvalues, create_time, update_time, deptid, owner, active, page_id, status FROM budget_detail ORDER BY id DESC", ()
         if path == "/universalIncidentList":
             return "SELECT ID, incident_value, active, owner, created_time, updated_time, page_id, department_id FROM universal_incident", ()
+        if path == "/decisions":
+            return "SELECT id, decision_value, org_id, active, owner, status, priority, created_time, updated_time FROM decisions ORDER BY FIELD(priority, 'Critical', 'High', 'Medium', 'Low'), id", ()
         if path.startswith("/initiativesList/"):
             return "SELECT id, initiative_value, active, owner, created_time, updated_time, page_id FROM initiatives_details ORDER BY updated_time DESC", ()
         if path == "/auditManagementList":
             return "SELECT ID, managementvalue, active, owner, created_time, updated_time, page_id FROM audit_management", ()
         if path.startswith("/retrieveTaskList/"):
             return "SELECT ID, task_value, active, owner, created_time, updated_time, priority, status FROM task_details ORDER BY updated_time DESC", ()
+        if re.match(r"^/task/\d+$", path):
+            task_id = path.split("/")[-1]
+            return "SELECT ID, task_value, active, owner, created_time, updated_time, priority, status FROM task_details WHERE ID = %s", (task_id,)
         if path.startswith("/meetingManagementList/"):
             return "SELECT ID, meetingManagementValue, active, owner, created_time, updated_time, page_id FROM meeting_management ORDER BY updated_time DESC", ()
         if path == "/compliance" or path.startswith("/compliance/"):
@@ -110,6 +118,9 @@ class JavaBridge:
             return "SELECT emp_id, org_id, user_name, email_address, status FROM employee_credentials ORDER BY email_address ASC", ()
         if path.startswith("/scoreCardList"):
             return "SELECT id, score_card_val, active, owner, created_time, updated_time, page_id, score_name FROM score_card ORDER BY created_time DESC", ()
+        if re.match(r"^/scorecard/\d+$", path):
+            scorecard_id = path.split("/")[-1]
+            return "SELECT id, perspective, kpi_name, target, actual, owner, status, assigned_user_id FROM scorecard_kpis WHERE id = %s", (scorecard_id,)
         if path == "/orgStructureList":
             return "SELECT Id, empId, parent_id, status, start_date, end_date, active FROM org_structure_details", ()
         if path == "/userRoleMgmt":
@@ -260,7 +271,27 @@ class JavaBridge:
         """Format MySQL rows into the same JSON shape the Java endpoint would return."""
         result = []
         for r in rows:
-            if path in ("/riskListView",) or path.startswith("/riskList/"):
+            if re.match(r"^/task/\d+$", path) or path.startswith("/retrieveTaskList/"):
+                obj = self._parse_json_col(r, "task_value")
+                obj["id"] = r.get("ID")
+                obj["owner"] = r.get("owner")
+                obj["active"] = r.get("active")
+                obj["priority"] = r.get("priority")
+                obj["status"] = r.get("status")
+                obj["assigned_user_id"] = obj.get("assignedUserId")
+                result.append(obj)
+            elif re.match(r"^/scorecard/\d+$", path):
+                result.append({
+                    "id": r.get("id"),
+                    "perspective": r.get("perspective"),
+                    "kpi_name": r.get("kpi_name"),
+                    "target": r.get("target"),
+                    "actual": r.get("actual"),
+                    "owner": r.get("owner"),
+                    "status": r.get("status"),
+                    "assigned_user_id": r.get("assigned_user_id"),
+                })
+            elif path in ("/riskListView",) or path.startswith("/riskList/") or re.match(r"^/risk/\d+$", path):
                 obj = self._parse_json_col(r, "risk_value")
                 obj["id"] = r.get("ID")
                 obj["active"] = r.get("active")
@@ -285,6 +316,16 @@ class JavaBridge:
                 obj["active"] = r.get("active")
                 obj["page_id"] = r.get("page_id")
                 obj["department_id"] = r.get("department_id")
+                result.append(obj)
+            elif path == "/decisions":
+                obj = self._parse_json_col(r, "decision_value")
+                obj["id"] = r.get("id")
+                obj["org_id"] = r.get("org_id")
+                obj["owner"] = r.get("owner")
+                obj["status"] = r.get("status")
+                obj["priority"] = r.get("priority")
+                obj["active"] = r.get("active")
+                obj["created_time"] = str(r.get("created_time") or "")
                 result.append(obj)
             elif path.startswith("/initiativesList/"):
                 obj = self._parse_json_col(r, "initiative_value")
@@ -595,6 +636,13 @@ class JavaBridge:
                 "VALUES (%s, %s, %s, NOW(), NOW(), %s, %s)",
                 (json.dumps(data), data.get("active", 1), data.get("owner", ""), data.get("page_id"), data.get("department_id")),
             )
+        if path == "/decisions":
+            decision_value = {k: data.get(k) for k in ("title", "description", "owner", "priority", "dueDate")}
+            return (
+                "INSERT INTO decisions (decision_value, org_id, active, owner, status, priority, created_time, updated_time) "
+                "VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW())",
+                (json.dumps(decision_value), data.get("org_id"), data.get("active", 1), data.get("owner_emp_id", data.get("owner", "")), data.get("status", "Pending"), data.get("priority_col", data.get("priority", "Medium"))),
+            )
         if path == "/swotList":
             return (
                 "INSERT INTO swot_analysis (swot_analysis_value, active, owner, page_id, flag_type, created_time, updated_time) "
@@ -696,6 +744,13 @@ class JavaBridge:
                 "UPDATE universal_incident SET incident_value=%s, updated_time=NOW() WHERE ID=%s",
                 (json.dumps(data), pk),
             )
+        if path.startswith("/decisions/"):
+            pk = path.split("/")[-1]
+            blob = data.get("decision_value", data)
+            return (
+                "UPDATE decisions SET decision_value=%s, status=%s, priority=%s, updated_time=NOW() WHERE id=%s",
+                (json.dumps(blob), data.get("status", ""), data.get("priority", ""), pk),
+            )
         if path.startswith("/swotList/"):
             pk = path.split("/")[-1]
             return (
@@ -740,6 +795,8 @@ class JavaBridge:
             return "DELETE FROM meeting_management WHERE ID=%s", (path.split("/")[-1],)
         if path.startswith("/universalIncidentList/"):
             return "DELETE FROM universal_incident WHERE ID=%s", (path.split("/")[-1],)
+        if path.startswith("/decisions/"):
+            return "DELETE FROM decisions WHERE id=%s", (path.split("/")[-1],)
         if path.startswith("/swotList/"):
             return "DELETE FROM swot_analysis WHERE ID=%s", (path.split("/")[-1],)
         if path.startswith("/pestelList/"):

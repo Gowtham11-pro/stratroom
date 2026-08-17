@@ -43,6 +43,18 @@ class Settings:
     MAX_STRING_LENGTH: int = 10000
     MAX_PROMPT_LENGTH: int = 50000
 
+    # ── AI Token / I/O limits (Task 2: token optimization) ──
+    # Inbound chat message character cap (prevents token-input spikes).
+    MAX_CHAT_INPUT_CHARS: int = int(os.getenv("MAX_CHAT_INPUT_CHARS", "8000"))
+    # Hard output cap applied to every LLM response (global guard).
+    MAX_RESPONSE_CHARS: int = int(os.getenv("MAX_RESPONSE_CHARS", "16000"))
+    # Per-call provider max_tokens ceiling (advisory; actual char cap is above).
+    MAX_LLM_MAX_TOKENS: int = int(os.getenv("MAX_LLM_MAX_TOKENS", "2048"))
+    # Restrict tool-result summaries fed back to the model on subsequent turns.
+    MAX_TOOL_RESULT_CHARS: int = int(os.getenv("MAX_TOOL_RESULT_CHARS", "4000"))
+    # Rolling window of responses kept for the in-memory token benchmark.
+    TOKEN_BENCHMARK_WINDOW: int = int(os.getenv("TOKEN_BENCHMARK_WINDOW", "200"))
+
     # ── MySQL (Java business data) ──
     MYSQL_HOST: str = os.getenv("MYSQL_HOST", "host.docker.internal")
     MYSQL_PORT: int = int(os.getenv("MYSQL_PORT", "3306"))
@@ -63,8 +75,14 @@ class Settings:
     # ── AI Providers ──
     ALLOWED_PROVIDERS: frozenset[str] = frozenset({
         "openai", "anthropic", "google", "deepseek", "moonshot",
-        "together", "mistral", "xai", "ollama", "mock",
+        "together", "mistral", "xai", "ollama", "mock", "qwen", "qwen2.5",
     })
+
+    # Server-side default LLM config — used when a request supplies no
+    # api_key/endpoint of its own, so agents work out of the box.
+    AI_DEFAULT_PROVIDER: str = os.getenv("AI_PROVIDER", "").strip().lower()
+    AI_DEFAULT_API_KEY: str = os.getenv("AI_API_KEY", "").strip()
+    AI_DEFAULT_MODEL: str = os.getenv("AI_MODEL", "").strip()
 
     # ── Storage ──
     STORAGE_DIR: str = os.getenv("STORAGE_DIR", os.path.join(os.path.dirname(__file__), "..", "..", "storage"))
@@ -83,6 +101,11 @@ class Settings:
             )
         if self.JWT_ALGORITHM not in ("HS256", "HS384", "HS512"):
             raise ValueError(f"Invalid JWT_ALGORITHM: {self.JWT_ALGORITHM}")
+        if self.AI_DEFAULT_PROVIDER and self.AI_DEFAULT_PROVIDER not in self.ALLOWED_PROVIDERS:
+            raise ValueError(
+                f"AI_PROVIDER '{self.AI_DEFAULT_PROVIDER}' is not in ALLOWED_PROVIDERS: "
+                f"{', '.join(sorted(self.ALLOWED_PROVIDERS))}"
+            )
 
     @property
     def cors_origins_list(self) -> list[str]:

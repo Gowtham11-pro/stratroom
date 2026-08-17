@@ -182,6 +182,87 @@ async def resolve_enterprise_role(email: str, db: AsyncSession | None = None) ->
 
 
 async def resolve_full_identity(email: str, db: AsyncSession | None = None) -> dict | None:
+    """Resolve full user identity from email.
+
+    Fast path: single MySQL JOIN query combining employee_details +
+    user_role_management in one round-trip (replaces 3 sequential calls).
+    Falls back to the original multi-call chain if the fast path fails.
+    """
+    # ── Fast path: single JOIN query ──
+    try:
+        rows = await bridge._mysql(
+            "SELECT ed.emp_id, ed.org_id, ed.first_name, ed.last_name, "
+            "ed.title, ed.department, ed.location, ed.email_address, "
+            "ed.status, ed.dept_id, ed.parent_emp_id, "
+            "urm.designation, urm.role AS urm_role, "
+            "urm.login_status, urm.department AS urm_department, "
+            "urm.location AS urm_location, urm.status AS urm_status "
+            "FROM employee_details ed "
+            "LEFT JOIN user_role_management urm "
+            "  ON ed.emp_id = urm.emp_id AND ed.org_id = urm.org_id "
+            "WHERE LOWER(ed.email_address) = LOWER(%s) "
+            "AND (ed.status IS NULL OR ed.status NOT IN ('InActive', 'Inactive')) "
+            "LIMIT 1",
+            (email,),
+        )
+        if rows and rows[0]:
+            r = rows[0]
+            fn = (r.get("first_name") or "").strip()
+            ln = (r.get("last_name") or "").strip()
+            full_name = f"{fn} {ln}".strip()
+
+            employee = {
+                "emp_id": r.get("emp_id"),
+                "full_name": full_name or None,
+                "title": r.get("title"),
+                "department": r.get("department"),
+                "location": r.get("location"),
+                "email_address": r.get("email_address"),
+                "status": r.get("status"),
+                "dept_id": r.get("dept_id"),
+                "parent_emp_id": r.get("parent_emp_id"),
+            }
+
+            ent_role = None
+            if r.get("designation") or r.get("urm_role"):
+                ent_role = {
+                    "emp_id": r.get("emp_id"),
+                    "designation": r.get("designation") or "",
+                    "role": r.get("urm_role") or "",
+                    "login_status": r.get("login_status") or "Active",
+                    "department": r.get("urm_department"),
+                    "location": r.get("urm_location"),
+                    "status": r.get("urm_status") or "Active",
+                }
+
+            app_role = r.get("title") or "member"
+
+            return {
+                "user_id": r.get("emp_id"),
+                "org_id": r.get("org_id"),
+                "email": r.get("email_address") or email,
+                "full_name": full_name,
+                "app_role": app_role,
+                "employee": employee,
+                "enterprise_role": ent_role,
+                "designation": (
+                    (ent_role.get("designation") if ent_role else None)
+                    or r.get("title")
+                    or app_role
+                ),
+                "department": (
+                    (ent_role.get("department") if ent_role else None)
+                    or r.get("department")
+                ),
+                "location": (
+                    (ent_role.get("location") if ent_role else None)
+                    or r.get("location")
+                ),
+            }
+    except Exception:
+        logger.debug("Fast-path identity resolution failed for %s, falling back", email)
+
+    # ── Fallback: original 3-call chain ──
     user = await resolve_user_full(email, db)
     if not user:
         return None
@@ -211,3 +292,4 @@ async def resolve_full_identity(email: str, db: AsyncSession | None = None) -> d
             or (employee.get("location") if employee else None)
         ),
     }
+

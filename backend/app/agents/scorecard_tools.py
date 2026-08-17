@@ -11,6 +11,38 @@ logger = logging.getLogger("stratroom.agents.scorecard_tools")
 VALID_SC_STATUSES = {"on-track", "at-risk", "critical"}
 
 
+JUNK_KPIS_AGENT_SQL = (
+    "AND LOWER(TRIM(kpi_name)) NOT IN ('baby','news','newws','sirenn','tron','jessi','jess','dracks',"
+    "'trans','punitha','narayanan','rose','tset2','kpifere','finnce','score','kpi 2','kpi new','kpi02','kpi01',"
+    "'kpi - objective - fin1','fin_obj1_kpi1','customer kpi','kpi','obj1 kpi1','sironn') "
+    "AND LOWER(kpi_name) NOT LIKE '%%newws%%' "
+    "AND LOWER(kpi_name) NOT LIKE '%%sirenn%%' "
+    "AND LOWER(kpi_name) NOT LIKE '%%tset2%%' "
+    "AND LOWER(kpi_name) NOT LIKE '%%kpifere%%' "
+    "AND LOWER(kpi_name) NOT LIKE '%%finnce%%' "
+    "AND LOWER(kpi_name) NOT LIKE '%%fin_obj1_kpi1%%'"
+)
+
+PERSP_ALIAS_MAP = {
+    "financial performance": "Financial",
+    "financial performance and growth": "Financial",
+    "financial": "Financial",
+    "customer": "Customer",
+    "customer and market": "Customer",
+    "ops": "Internal Processes",
+    "internal processes": "Internal Processes",
+    "manufacturing and operational excellence": "Internal Processes",
+    "people": "Learning & Growth",
+    "people and organisational capability": "Learning & Growth",
+    "learning & growth": "Learning & Growth",
+    "esg": "ESG & Compliance",
+    "esg & compliance": "ESG & Compliance",
+    "risk": "Risk & Security",
+    "risk & security": "Risk & Security",
+    "governance risk and compliance": "Risk & Security",
+}
+
+
 async def query_scorecards(
     user_id: int,
     org_id: int,
@@ -19,13 +51,7 @@ async def query_scorecards(
     is_admin: bool = False,
     is_manager: bool = False,
 ) -> dict:
-    """Query scorecards (KPIs) from MySQL scorecard_kpis via the bridge.
-
-    Admin/manager users see all scorecards. Members see only assigned.
-    Uses direct org_id column (no employee_details JOIN needed — scorecard_kpis
-    has its own org_id).
-    Returns a dict with 'scorecards' list and 'summary' stats.
-    """
+    """Query scorecards (KPIs) from MySQL scorecard_kpis via the bridge."""
     from app.services.java_bridge import bridge
 
     where_clauses = ["org_id = %s"]
@@ -36,38 +62,47 @@ async def query_scorecards(
         params.append(user_id)
 
     if perspective_filter:
-        where_clauses.append("perspective = %s")
-        params.append(perspective_filter)
+        raw_p = perspective_filter.strip().lower()
+        norm_p = PERSP_ALIAS_MAP.get(raw_p, perspective_filter.strip())
+        where_clauses.append("(LOWER(perspective) = LOWER(%s) OR LOWER(perspective) LIKE LOWER(%s))")
+        params.extend([norm_p, f"%{norm_p}%"])
 
     if status_filter:
-        if status_filter in VALID_SC_STATUSES:
-            where_clauses.append("status = %s")
-            params.append(status_filter)
+        statuses = [s.strip().replace("_", "-").lower() for s in status_filter.split(",") if s.strip()]
+        valid_requested = [s for s in statuses if s in VALID_SC_STATUSES]
+        if valid_requested:
+            placeholders = ", ".join(["%s"] * len(valid_requested))
+            where_clauses.append(f"LOWER(status) IN ({placeholders})")
+            params.extend(valid_requested)
 
     where_sql = " AND ".join(where_clauses)
 
     rows = await bridge._mysql(
         f"SELECT id, perspective, kpi_name, target, actual, owner, status, assigned_user_id "
-        f"FROM scorecard_kpis WHERE {where_sql} "
-        f"ORDER BY perspective, id",
+        f"FROM scorecard_kpis WHERE id IN ("
+        f"SELECT MIN(id) FROM scorecard_kpis WHERE {where_sql} {JUNK_KPIS_AGENT_SQL} "
+        f"GROUP BY perspective, kpi_name, target, actual, status"
+        f") ORDER BY perspective, id",
         tuple(params),
     )
 
-    # Compute gap analysis
+    # Convert Decimals and compute gap analysis
     for sc in rows:
-        t = sc.get("target")
-        a = sc.get("actual")
+        t = float(sc["target"]) if sc.get("target") is not None else None
+        a = float(sc["actual"]) if sc.get("actual") is not None else None
+        sc["target"] = t
+        sc["actual"] = a
         if t and t != 0:
-            sc["gap_pct"] = round(((a or 0) - t) / t * 100, 1)
+            sc["gap_pct"] = round(((a or 0.0) - t) / t * 100, 1)
         else:
-            sc["gap_pct"] = 0
+            sc["gap_pct"] = 0.0
 
     summary = {
         "total": len(rows),
-        "on_track": sum(1 for s in rows if s["status"] == "on-track"),
-        "at_risk": sum(1 for s in rows if s["status"] == "at-risk"),
-        "critical": sum(1 for s in rows if s["status"] == "critical"),
-        "perspectives": list(set(s["perspective"] for s in rows)),
+        "on_track": sum(1 for s in rows if s.get("status") == "on-track"),
+        "at_risk": sum(1 for s in rows if s.get("status") == "at-risk"),
+        "critical": sum(1 for s in rows if s.get("status") == "critical"),
+        "perspectives": list(set(s.get("perspective") for s in rows if s.get("perspective"))),
     }
 
     return {"scorecards": rows, "summary": summary}
@@ -79,12 +114,7 @@ async def query_scorecard_summary(
     is_admin: bool = False,
     is_manager: bool = False,
 ) -> dict:
-    """Get an aggregated summary of scorecard perspectives.
-
-    Reads from MySQL scorecard_kpis via the bridge.
-    Admin/manager users see all perspectives. Members see only assigned.
-    Returns avg actual scores, KPI counts, and status breakdown per perspective.
-    """
+    """Get an aggregated summary of scorecard perspectives."""
     from app.services.java_bridge import bridge
 
     if is_admin or is_manager:
@@ -95,8 +125,10 @@ async def query_scorecard_summary(
             "SUM(CASE WHEN status = 'on-track' THEN 1 ELSE 0 END) as on_track, "
             "SUM(CASE WHEN status = 'at-risk' THEN 1 ELSE 0 END) as at_risk, "
             "SUM(CASE WHEN status = 'critical' THEN 1 ELSE 0 END) as critical "
-            "FROM scorecard_kpis WHERE org_id = %s "
-            "GROUP BY perspective ORDER BY MIN(id)",
+            f"FROM (SELECT MIN(id) as mid, perspective, actual, status "
+            f"FROM scorecard_kpis WHERE org_id = %s {JUNK_KPIS_AGENT_SQL} "
+            "GROUP BY perspective, kpi_name, target, actual, status) t "
+            "GROUP BY perspective ORDER BY MIN(mid)",
             (org_id,),
         )
     else:
@@ -107,8 +139,10 @@ async def query_scorecard_summary(
             "SUM(CASE WHEN status = 'on-track' THEN 1 ELSE 0 END) as on_track, "
             "SUM(CASE WHEN status = 'at-risk' THEN 1 ELSE 0 END) as at_risk, "
             "SUM(CASE WHEN status = 'critical' THEN 1 ELSE 0 END) as critical "
-            "FROM scorecard_kpis WHERE org_id = %s AND assigned_user_id = %s "
-            "GROUP BY perspective ORDER BY MIN(id)",
+            f"FROM (SELECT MIN(id) as mid, perspective, actual, status "
+            f"FROM scorecard_kpis WHERE org_id = %s AND assigned_user_id = %s {JUNK_KPIS_AGENT_SQL} "
+            "GROUP BY perspective, kpi_name, target, actual, status) t "
+            "GROUP BY perspective ORDER BY MIN(mid)",
             (org_id, user_id),
         )
 
@@ -117,11 +151,11 @@ async def query_scorecard_summary(
     for r in rows:
         result.append({
             "perspective": r["perspective"],
-            "avg_score": int(r["avg_score"]),
-            "kpi_count": int(r["kpi_count"]),
-            "on_track": int(r["on_track"]),
-            "at_risk": int(r["at_risk"]),
-            "critical": int(r["critical"]),
+            "avg_score": int(r["avg_score"]) if r.get("avg_score") is not None else 0,
+            "kpi_count": int(r.get("kpi_count", 0)),
+            "on_track": int(r.get("on_track", 0)),
+            "at_risk": int(r.get("at_risk", 0)),
+            "critical": int(r.get("critical", 0)),
         })
 
     return {"perspectives": result}

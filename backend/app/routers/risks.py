@@ -3,7 +3,9 @@ from pydantic import BaseModel, Field
 from typing import Optional
 
 from app.core.deps import require_role
+from app.core.rbac import _record_owner_emp_id, enforce_record_access, filter_visible_rows
 from app.services.java_bridge import bridge
+from app.services.monte_carlo import parse_risk, run_simulation
 
 router = APIRouter(prefix="/risks", tags=["risks"])
 
@@ -30,8 +32,40 @@ class RiskUpdate(BaseModel):
     residual_impact: Optional[int] = Field(default=None, ge=1, le=5)
 
 
+class RiskSimulate(BaseModel):
+    runs: int = Field(default=10000, ge=1000, le=50000)
+    confidence: float = Field(default=0.95, ge=0.90, le=0.99)
+
+
 @router.get("")
 async def list_risks(ctx: dict = Depends(require_role("member"))):
+    emp_id = ctx["user_id"]
+
+    data = await bridge.get(bridge.db_service, f"/riskList/{emp_id}")
+
+    rows = data if isinstance(data, list) else data.get("risk", data.get("risks", []))
+    rows = await filter_visible_rows(ctx, rows)
+    return {"risks": rows}
+
+
+@router.get("/{risk_id}")
+async def get_risk(
+    risk_id: int,
+    ctx: dict = Depends(require_role("member")),
+):
+    data = await bridge.get(bridge.db_service, f"/risk/{risk_id}")
+    if not data:
+        raise HTTPException(status_code=404, detail="Risk not found")
+    row = data[0] if isinstance(data, list) and data else (data if isinstance(data, dict) else {"risk": data})
+    await enforce_record_access(ctx, _record_owner_emp_id(row))
+    return row
+
+
+@router.post("/simulate")
+async def simulate_risks(
+    payload: RiskSimulate,
+    ctx: dict = Depends(require_role("member")),
+):
     emp_id = ctx["user_id"]
     is_admin = ctx["is_admin"]
     is_manager = ctx["is_manager"]
@@ -42,7 +76,25 @@ async def list_risks(ctx: dict = Depends(require_role("member"))):
         data = await bridge.get(bridge.db_service, f"/riskList/{emp_id}")
 
     rows = data if isinstance(data, list) else data.get("risk", data.get("risks", []))
-    return {"risks": rows}
+    if not rows:
+        raise HTTPException(status_code=400, detail="No risk data available for simulation.")
+
+    modelable = []
+    for row in rows:
+        active = str(row.get("active", "1")).strip().lower()
+        if active in ("0", "false", "no"):
+            continue
+        parsed = parse_risk(row)
+        if parsed:
+            modelable.append(parsed)
+
+    if not modelable:
+        raise HTTPException(status_code=400, detail="No modelable risks found (need likelihood/impact/heat).")
+
+    try:
+        return run_simulation(modelable, runs=payload.runs, confidence=payload.confidence)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.post("", status_code=201)
@@ -75,6 +127,8 @@ async def update_risk(
     existing = await bridge.get(bridge.db_service, f"/risk/{risk_id}")
     if not existing:
         raise HTTPException(status_code=404, detail="Risk not found")
+    record = existing[0] if isinstance(existing, list) and existing else (existing if isinstance(existing, dict) else {})
+    await enforce_record_access(ctx, _record_owner_emp_id(record))
 
     body = {"id": risk_id, "empId": ctx["user_id"], "orgId": ctx["org_id"]}
     if payload.name is not None:
@@ -106,6 +160,8 @@ async def delete_risk(
     existing = await bridge.get(bridge.db_service, f"/risk/{risk_id}")
     if not existing:
         raise HTTPException(status_code=404, detail="Risk not found")
+    record = existing[0] if isinstance(existing, list) and existing else (existing if isinstance(existing, dict) else {})
+    await enforce_record_access(ctx, _record_owner_emp_id(record))
 
     await bridge.delete(bridge.db_service, f"/risk/{risk_id}")
     return {"ok": True}

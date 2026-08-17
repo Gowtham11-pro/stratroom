@@ -7979,6 +7979,13 @@ body.theme-light ::-webkit-scrollbar-thumb:hover {
         console.log(`✅ Role & Prompts active: ${CurrentUser.role} (${CurrentUser.department})`);
     }
 
+    window.esc = function(s) {
+        if (s == null) return '';
+        return String(s).replace(/[&<>'"]/g, function(m) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;'}[m];
+        });
+    };
+
     // ========== 10. EXPOSE PUBLIC API ==========
     window.RolePrompts = {
         getCurrentUser: () => ({ ...CurrentUser }),
@@ -12176,15 +12183,11 @@ if (_navCharts) {
     <!-- ══════════════════════════ TASK EXECUTION ══════════════════════════ -->
     <div class="panel" id="view-tasks">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-        <div class="section-label" style="margin-bottom:0">Pending Executive Actions — 12 items requiring approval</div>
+        <div class="section-label" style="margin-bottom:0">Pending Executive Actions</div>
         <button class="btn btn-primary" onclick="approveAll()">Approve All →</button>
       </div>
       <div class="task-pipeline" id="task-list">
-        <div class="task-card urgent"><div class="task-check" onclick="toggleTask(this)">!</div><div class="task-body"><div class="task-title">Escalate cyber risk review to CISO — schedule emergency committee meeting</div><div class="task-meta"><span>⟡ Risk Agent</span><span>🔴 Critical</span><span>👤 CRO, CIO</span><span>📅 Today</span></div></div><button class="btn btn-primary" style="font-size:11px;flex-shrink:0" onclick="approveTask(this)">Approve</button></div>
-        <div class="task-card in-progress"><div class="task-check" onclick="toggleTask(this)"></div><div class="task-body"><div class="task-title">Reallocate $2.4M from underperforming program to Digital Transformation initiative</div><div class="task-meta"><span>⟡ Finance Agent</span><span>🟠 High</span><span>👤 CFO</span><span>📅 Oct 15</span></div></div><button class="btn btn-primary" style="font-size:11px;flex-shrink:0" onclick="approveTask(this)">Approve</button></div>
-        <div class="task-card pending"><div class="task-check" onclick="toggleTask(this)"></div><div class="task-body"><div class="task-title">Initiate vendor diversification RFP for APAC logistics — 3 alternatives minimum</div><div class="task-meta"><span>⟡ Risk Agent</span><span>🟡 Medium</span><span>👤 COO</span><span>📅 Oct 20</span></div></div><button class="btn btn-primary" style="font-size:11px;flex-shrink:0" onclick="approveTask(this)">Approve</button></div>
-        <div class="task-card pending"><div class="task-check" onclick="toggleTask(this)"></div><div class="task-body"><div class="task-title">Schedule MEA market entry go/no-go decision with executive committee</div><div class="task-meta"><span>⟡ Strategy Agent</span><span>🟡 Medium</span><span>👤 CEO</span><span>📅 Oct 18</span></div></div><button class="btn btn-primary" style="font-size:11px;flex-shrink:0" onclick="approveTask(this)">Approve</button></div>
-        <div class="task-card pending"><div class="task-check" onclick="toggleTask(this)"></div><div class="task-body"><div class="task-title">Initiate talent retention program for Product division — three senior engineers at risk</div><div class="task-meta"><span>⟡ Predictive Layer</span><span>🟠 High</span><span>👤 CHRO</span><span>📅 Oct 22</span></div></div><button class="btn btn-primary" style="font-size:11px;flex-shrink:0" onclick="approveTask(this)">Approve</button></div>
+        <div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;background:var(--bg2,#0f172a);border:1px solid var(--border,#1e293b);border-radius:12px;">Loading tasks from StratRoom DB...</div>
       </div>
 
       <!-- ── AI Intelligence Suite ── -->

@@ -111,10 +111,11 @@ async def agent_chat(
             detail="No usable AI model. Provide a model in the request or configure AI_MODEL on the server.",
         )
     if not api_key and provider not in ("ollama", "mock"):
-        raise HTTPException(
-            status_code=422,
-            detail="No API key provided. Set one in the UI or configure AI_API_KEY on the server.",
-        )
+        if settings.AI_DEFAULT_API_KEY:
+            api_key = settings.AI_DEFAULT_API_KEY
+        else:
+            provider = "mock"
+            model = "mock"
 
     runner = AgentRunner(req.agent)
     try:

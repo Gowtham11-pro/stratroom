@@ -20527,22 +20527,10 @@ window.sendModuleChat=function(moduleId){
   var agentMap={risk:'risk',scorecard:'strategy',budget:'finance',tasks:'task',meetings:'meetings',projects:'projects',incidents:'incident',compliance:'compliance',audit:'audit',swot:'strategy',pestel:'strategy',forecast:'strategy',docintel:'strategy',org:'strategy',bcp:'compliance'};
   var agentDomain=agentMap[moduleId]||'strategy';
   var cfg=_getLLMConfig();
-  // Auto-fallback to Ollama if provider has no API key
-  if(!cfg.apiKey&&cfg.provider!=='ollama'){
-    cfg.provider='ollama';
-    cfg.model=cfg.model||'llama3.2';
-    cfg.baseUrl='http://host.docker.internal:11434';
-    cfg.apiKey='';
-    // Save as current config
-    try{localStorage.setItem('llm_provider','openai');localStorage.setItem('ollama_endpoint','http://host.docker.internal:11434');localStorage.setItem('ollama_model','llama3.2');localStorage.setItem('selected_llm_provider','openai');}catch(ex){}
-  }
-  if(!cfg.apiKey&&cfg.provider!=='ollama'){
-    ty.remove();
-    var errDiv=document.createElement('div');errDiv.className='smc-msg-bubble';
-    errDiv.innerHTML='<div class="smc-avatar">SR</div><div class="smc-bubble-text" style="font-size:12px;color:var(--red)">Configure your LLM API key in Settings first. Or select Ollama as provider if running locally.</div>';
-    container.appendChild(errDiv);container.scrollTop=container.scrollHeight;
-    if(sendBtn){sendBtn.disabled=false;sendBtn.innerHTML='Send ↑';}
-    return;
+  if (!cfg.apiKey && cfg.provider !== 'ollama' && cfg.provider !== 'mock') {
+    cfg.provider = 'mock';
+    cfg.model = 'mock';
+    cfg.baseUrl = null;
   }
   var ac=new AbortController();var to=setTimeout(function(){ac.abort();},45000);
   fetch('/agents/chat',{

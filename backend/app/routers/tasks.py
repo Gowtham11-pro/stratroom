@@ -214,6 +214,8 @@ async def create_task(
         "status": payload.status,
         "assignedUserId": payload.assigned_user_id or ctx["user_id"],
         "empId": ctx["user_id"],
+        "source_module": payload.source_module,
+        "page_name": payload.page_name,
     }
     result = await bridge.post(bridge.db_service, "/task", json=body)
     task_id = result.get("id")

@@ -20215,15 +20215,55 @@ function sendModuleChatTo(moduleId, inputId, messagesId) {
     };
 
     function refreshStandaloneStats() {
-        ['risk','scorecard','projects','budget','incidents','documents'].forEach(function(module) {
-            var data = window.getModuleData(module);
-            var el = document.getElementById('stat-' + module + '-count');
-            if (el) el.textContent = data ? data.length : 0;
+        // Fetch live counts from backend API and update stat cards
+        if (typeof window.authFetch !== 'function') return;
+        var statMap = {
+            'stat-risk-count':      '/risks',
+            'stat-scorecard-count': '/scorecards',
+            'stat-projects-count':  '/projects',
+            'stat-incidents-count': '/incidents',
+        };
+        Object.entries(statMap).forEach(function([elId, endpoint]) {
+            window.authFetch(endpoint).then(function(resp) {
+                if (!resp.ok) return;
+                return resp.json();
+            }).then(function(data) {
+                if (!data) return;
+                var count = 0;
+                if (Array.isArray(data)) count = data.length;
+                else if (data.risks) count = data.risks.length;
+                else if (data.scorecards) count = data.scorecards.length;
+                else if (data.projects) count = data.projects.length;
+                else if (data.incidents) count = data.incidents.length;
+                else if (data.tasks) count = data.tasks.length;
+                var el = document.getElementById(elId);
+                if (el) {
+                    el.textContent = count;
+                    el.style.transition = 'color 0.4s';
+                    el.style.color = 'var(--blue2)';
+                }
+            }).catch(function() {});
         });
+        // Tasks count from /tasks endpoint
+        window.authFetch('/tasks').then(function(resp) {
+            if (!resp.ok) return;
+            return resp.json();
+        }).then(function(data) {
+            if (!data) return;
+            var tasks = data.tasks || data;
+            var count = Array.isArray(tasks) ? tasks.length : 0;
+            var pending = Array.isArray(tasks) ? tasks.filter(function(t){ return t.status !== 'completed'; }).length : 0;
+            var el = document.getElementById('stat-budget-count');
+            if (el) { el.textContent = count; }
+            // Also update task header if tasks page is visible
+            var hdr = document.querySelector('#view-tasks .section-label');
+            if (hdr && pending > 0) hdr.textContent = 'PENDING EXECUTIVE ACTIONS \u2014 ' + pending + ' ITEMS REQUIRING APPROVAL';
+        }).catch(function() {});
+        // Keep localStorage size display
         var totalSize = 0;
         for (var i = 0; i < localStorage.length; i++) {
             var k = localStorage.key(i);
-            if (k && (k.startsWith('ai_gov_') || k === STORAGE_KEYS.publishHistory)) {
+            if (k && (k.startsWith('ai_gov_') || k === (window.STORAGE_KEYS || {}).publishHistory)) {
                 totalSize += (localStorage.getItem(k) || '').length;
             }
         }
@@ -21565,6 +21605,14 @@ if (document.readyState === 'loading') {
         if (typeof refreshDashboardKPIs === 'function') setTimeout(refreshDashboardKPIs, 300);
         if (typeof startAutoSync === 'function') startAutoSync();
         if (typeof injectBackButtons === 'function') injectBackButtons();
+        // ── Load Org Tree on Login (RBAC Mapping Baseline) ──
+        setTimeout(function() {
+          if (typeof hydrateOrgPage === 'function') hydrateOrgPage();
+        }, 800);
+        // ── Refresh Dashboard Live Counts on Login ──
+        setTimeout(function() {
+          if (typeof refreshStandaloneStats === 'function') refreshStandaloneStats();
+        }, 1200);
         return;
       } else {
         // Login failed — show error, do NOT let user in
@@ -22333,6 +22381,16 @@ if (document.readyState === 'loading') {
               '<select id="task-form-status" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">' +
                 '<option value="pending" selected>Pending</option><option value="in_progress">In Progress</option><option value="completed">Completed</option></select></div>' +
           '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">' +
+            '<div><label style="font-size:11px;font-weight:600;color:var(--text3);display:block;margin-bottom:4px;">Source Module</label>' +
+              '<select id="task-form-source" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">' +
+                '<option value="">-- None --</option><option value="Risk">Risk</option><option value="PESTEL">PESTEL</option>' +
+                '<option value="Initiatives">Initiatives</option><option value="Spotlight">Spotlight</option>' +
+                '<option value="Scorecard">Scorecard</option><option value="Compliance">Compliance</option>' +
+                '<option value="Incidents">Incidents</option><option value="Manual">Manual</option></select></div>' +
+            '<div><label style="font-size:11px;font-weight:600;color:var(--text3);display:block;margin-bottom:4px;">Page / Group Tag</label>' +
+              '<input id="task-form-page" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;" placeholder="e.g. Q3 Risks"></div>' +
+          '</div>' +
           '<div style="margin-bottom:16px"><label style="font-size:11px;font-weight:600;color:var(--text3);display:block;margin-bottom:4px;">Due Date</label>' +
             '<input id="task-form-due" type="date" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;"></div>' +
           '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
@@ -22352,6 +22410,10 @@ if (document.readyState === 'loading') {
         document.getElementById('task-form-priority').value = task ? (task.priority || 'Medium') : 'Medium';
         document.getElementById('task-form-status').value = task ? (task.status || 'pending') : 'pending';
         document.getElementById('task-form-due').value = task ? (task.due_date || '') : '';
+        const srcEl = document.getElementById('task-form-source');
+        if (srcEl) srcEl.value = task ? (task.source_module || '') : '';
+        const pageEl = document.getElementById('task-form-page');
+        if (pageEl) pageEl.value = task ? (task.page_name || '') : '';
         if (task) { titleEl.textContent = 'Edit Task'; submitBtn.textContent = 'Update'; }
         else { titleEl.textContent = 'Create Task'; submitBtn.textContent = 'Create'; }
         modal.style.display = 'flex';
@@ -22361,12 +22423,16 @@ if (document.readyState === 'loading') {
         const id = document.getElementById('task-edit-id').value;
         const title = document.getElementById('task-form-title').value.trim();
         if (!title) { alert('Title is required'); return; }
+        const srcVal = (document.getElementById('task-form-source') || {}).value || '';
+        const pageVal = (document.getElementById('task-form-page') || {}).value || '';
         const body = {
           title: title,
           description: document.getElementById('task-form-desc').value.trim(),
           priority: document.getElementById('task-form-priority').value,
           status: document.getElementById('task-form-status').value,
-          due_date: document.getElementById('task-form-due').value || null
+          due_date: document.getElementById('task-form-due').value || null,
+          source_module: srcVal || null,
+          page_name: pageVal || null
         };
         try {
           const url = id ? (BACKEND + API.tasks + '/' + id) : (BACKEND + API.tasks);
@@ -22495,7 +22561,48 @@ if (document.readyState === 'loading') {
         '<div style="padding:8px 10px;background:var(--green-dim);border:1px solid var(--green-border);border-radius:8px"><div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:2px;font-family:monospace">✅ DONE · ' + roleLabel + '</div><div style="font-size:12px;color:var(--text2)">' + completed + ' tasks completed. ' + (completionRate >= 80 ? 'Strong progress.' : 'Room for improvement.') + '</div></div>';
     }
 
+    // ── Check for stalled tasks and show AI stall alert ──
+    setTimeout(function() { checkStagnantTasks(); }, 200);
+
     return true;
+  }
+
+  // ── Stagnant Task Stall Detection ──
+  async function checkStagnantTasks() {
+    try {
+      const resp = await window.authFetch('/tasks/stagnant?days=7');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const stagnant = data.stagnant_tasks || [];
+      if (!stagnant.length) return;
+
+      // Find or create stall alert container in task panel
+      let alertBox = document.getElementById('task-stall-alert');
+      if (!alertBox) {
+        alertBox = document.createElement('div');
+        alertBox.id = 'task-stall-alert';
+        const taskList = document.getElementById('task-list');
+        if (taskList && taskList.parentElement) taskList.parentElement.insertBefore(alertBox, taskList);
+      }
+      alertBox.style.cssText = 'border:1px solid #f59e0b;border-left:4px solid #f59e0b;border-radius:10px;padding:14px 18px;background:rgba(245,158,11,0.08);margin-bottom:14px;';
+      alertBox.innerHTML =
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
+          '<div style="font-weight:700;font-size:12px;color:#f59e0b;letter-spacing:0.05em;">⚠ AI STALL ALERT — ' + stagnant.length + ' TASK(S) NOT PROGRESSING (LAST 7 DAYS)</div>' +
+          '<button onclick="this.closest(\'#task-stall-alert\').style.display=\'none\'" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:14px;">✕</button>' +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:6px;">' +
+        stagnant.slice(0, 4).map(function(t) {
+          return '<div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;background:rgba(245,158,11,0.06);border-radius:6px;padding:8px 12px;">' +
+            '<span style="color:#f8fafc;font-weight:500;">' + (t.title || 'Task #' + t.id) + '</span>' +
+            '<div style="display:flex;gap:6px;align-items:center;">' +
+              '<span style="font-size:10px;color:#94a3b8;">Last updated: ' + (t.last_updated ? t.last_updated.substring(0,10) : 'Unknown') + '</span>' +
+              '<span style="font-size:10px;padding:2px 7px;border-radius:99px;background:rgba(245,158,11,0.2);color:#f59e0b;">' + (t.priority || 'Medium') + '</span>' +
+            '</div>' +
+          '</div>';
+        }).join('') +
+        '</div>' +
+        '<div style="margin-top:10px;font-size:11px;color:#94a3b8;">AI Recommendation: Review these tasks immediately. Update status or reassign to prevent project delays.</div>';
+    } catch(e) {}
   }
 
   // ── Global Approve Handlers ──

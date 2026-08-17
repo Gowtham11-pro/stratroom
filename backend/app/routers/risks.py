@@ -19,6 +19,7 @@ class RiskCreate(BaseModel):
     inherent_impact: int = Field(default=1, ge=1, le=5)
     residual_likelihood: int = Field(default=1, ge=1, le=5)
     residual_impact: int = Field(default=1, ge=1, le=5)
+    page_name: Optional[str] = None
 
 
 class RiskUpdate(BaseModel):
@@ -30,6 +31,7 @@ class RiskUpdate(BaseModel):
     inherent_impact: Optional[int] = Field(default=None, ge=1, le=5)
     residual_likelihood: Optional[int] = Field(default=None, ge=1, le=5)
     residual_impact: Optional[int] = Field(default=None, ge=1, le=5)
+    page_name: Optional[str] = None
 
 
 class RiskSimulate(BaseModel):
@@ -38,12 +40,24 @@ class RiskSimulate(BaseModel):
 
 
 @router.get("")
-async def list_risks(ctx: dict = Depends(require_role("member"))):
+async def list_risks(
+    page: Optional[str] = None,
+    ctx: dict = Depends(require_role("member"))
+):
     emp_id = ctx["user_id"]
 
     data = await bridge.get(bridge.db_service, f"/riskList/{emp_id}")
 
     rows = data if isinstance(data, list) else data.get("risk", data.get("risks", []))
+    
+    if page:
+        page_lower = page.lower()
+        rows = [
+            r for r in rows 
+            if (r.get("page_name") or "").lower() == page_lower 
+               or (r.get("page_id") or "").lower() == page_lower
+        ]
+        
     rows = await filter_visible_rows(ctx, rows)
     return {"risks": rows}
 
@@ -114,6 +128,8 @@ async def create_risk(
         "empId": ctx["user_id"],
         "orgId": ctx["org_id"],
     }
+    if payload.page_name is not None:
+        body["page_id"] = payload.page_name
     result = await bridge.post(bridge.db_service, "/risk", json=body)
     return {"id": result.get("id"), "ok": True}
 
@@ -147,6 +163,8 @@ async def update_risk(
         body["residualLikelihood"] = payload.residual_likelihood
     if payload.residual_impact is not None:
         body["residualImpact"] = payload.residual_impact
+    if payload.page_name is not None:
+        body["page_id"] = payload.page_name
 
     await bridge.put(bridge.db_service, "/risk", json=body)
     return {"ok": True}

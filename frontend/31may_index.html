@@ -9874,7 +9874,8 @@ async function initRiskPage(){
   window._riskHydrated = true;
   if (typeof window.isTokenValid !== 'function' || !window.isTokenValid()) { updateKPIs(); renderRiskTable(); renderHeatmap('inherent'); renderAI(); initToggles(); return; }
   try {
-    const resp = await (window.authFetch || fetch)((window.BACKEND || '') + '/risks', { cache: 'no-store' });
+    const pageParam = window.CURRENT_PAGE_ID ? '?page=' + encodeURIComponent(window.CURRENT_PAGE_ID) : '';
+    const resp = await (window.authFetch || fetch)((window.BACKEND || '') + '/risks' + pageParam, { cache: 'no-store' });
     if (resp.ok) {
       const data = await resp.json();
       const rows = data.risks || data;

@@ -22359,8 +22359,8 @@ if (document.readyState === 'loading') {
 
   // ── 5d. INJECT TASKS DATA ──
   async function hydrateTasksPage() {
-    const tasks = await loadTasksFromBackend();
-    if (!tasks || !tasks.length) return false;
+    let tasks = await loadTasksFromBackend();
+    if (!tasks) tasks = [];
 
     const role = localStorage.getItem('user_role') || 'member';
     const isAdmin = (role === 'CEO' || role === 'admin' || role === 'Admin');
@@ -22551,23 +22551,54 @@ if (document.readyState === 'loading') {
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
 
     // ── Update Cognitive Signals ──
-    const signalsContainer = document.querySelector('#view-tasks .ai-signal-item.sig-red')?.parentElement;
-    if (signalsContainer) {
-      signalsContainer.innerHTML =
+    const signalsCard = document.querySelector('#view-tasks .card[style*="border-left:3px solid var(--blue2)"]');
+    if (signalsCard) {
+      signalsCard.innerHTML =
+        '<div class="card-title" style="color:var(--blue2)">🔵 Cognitive Signals — Task Execution</div>' +
         '<div class="ai-signal-item sig-red"><div class="ai-signal-dot" style="background:var(--red)"></div><div><strong>' + criticalCount + ' Critical Tasks:</strong> ' + (criticalCount > 0 ? 'Requires immediate attention. ' + tasks.filter(t => t.priority === 'Critical').map(t => (t.title||t.Name||'Task').substring(0,40)).join(', ').substring(0,80) : 'No critical tasks. All clear.') + '</div></div>' +
         '<div class="ai-signal-item sig-amber"><div class="ai-signal-dot" style="background:var(--amber)"></div><div><strong>' + pending + ' Pending:</strong> ' + (pending > 0 ? pending + ' tasks awaiting action. ' + highCount + ' high priority items.' : 'No pending tasks.') + '</div></div>' +
         '<div class="ai-signal-item sig-green"><div class="ai-signal-dot" style="background:var(--green)"></div><div><strong>' + completionRate + '% Completion Rate:</strong> ' + completed + ' of ' + total + ' tasks completed.' + (completionRate >= 80 ? ' On target.' : ' Below target — review pending items.') + '</div></div>' +
-        '<div class="ai-signal-item sig-blue"><div class="ai-signal-dot" style="background:var(--blue2)"></div><div><strong>' + inProgress + ' In Progress:</strong> Active tasks being worked on. ' + (isMember ? 'Update progress on your assigned tasks.' : 'Monitor task execution across the team.') + '</div></div>';
+        '<div class="ai-signal-item sig-blue"><div class="ai-signal-dot" style="background:var(--blue2)"></div><div><strong>' + inProgress + ' In Progress:</strong> Active tasks being worked on. ' + (isMember ? 'Update progress on your assigned tasks.' : 'Monitor task execution across the team.') + '</div></div>' +
+        '<div id="tasks-signals-out" style="display:none;margin-top:10px;padding:10px;background:var(--blue-dim);border-radius:8px;font-size:12px;color:var(--text2);line-height:1.7"></div>' +
+        '<button class="btn btn-ghost" style="font-size:11px;margin-top:8px;width:100%" onclick="runModuleSignals(\'tasks\',this)">🤖 Refresh Signals</button>';
     }
 
     // ── Update Recommendations ──
-    const recsContainer = document.querySelector('#view-tasks .card[style*="border-left:3px solid var(--green)"] > div:not(.card-title):not(#tasks-recs-out):not(.btn)');
-    if (recsContainer && criticalCount > 0) {
+    const recsCard = document.querySelector('#view-tasks .card[style*="border-left:3px solid var(--green)"]');
+    if (recsCard) {
       const critTask = tasks.find(t => t.priority === 'Critical');
-      recsContainer.innerHTML =
+      recsCard.innerHTML =
+        '<div class="card-title" style="color:var(--green)">✅ Recommendations</div>' +
         '<div style="padding:8px 10px;background:var(--red-dim);border:1px solid var(--red-border);border-radius:8px;margin-bottom:5px"><div style="font-size:10px;font-weight:700;color:var(--red);margin-bottom:2px;font-family:monospace">🔴 CRITICAL · ' + roleLabel + '</div><div style="font-size:12px;color:var(--text2)">' + (critTask ? (critTask.title||critTask.Name) : 'No critical tasks') + '</div></div>' +
         '<div style="padding:8px 10px;background:var(--amber-dim);border:1px solid var(--amber-border);border-radius:8px;margin-bottom:5px"><div style="font-size:10px;font-weight:700;color:var(--amber);margin-bottom:2px;font-family:monospace">🟠 PENDING · ' + roleLabel + '</div><div style="font-size:12px;color:var(--text2)">' + pending + ' tasks pending action. Focus on high-priority items first.</div></div>' +
-        '<div style="padding:8px 10px;background:var(--green-dim);border:1px solid var(--green-border);border-radius:8px"><div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:2px;font-family:monospace">✅ DONE · ' + roleLabel + '</div><div style="font-size:12px;color:var(--text2)">' + completed + ' tasks completed. ' + (completionRate >= 80 ? 'Strong progress.' : 'Room for improvement.') + '</div></div>';
+        '<div style="padding:8px 10px;background:var(--green-dim);border:1px solid var(--green-border);border-radius:8px"><div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:2px;font-family:monospace">✅ DONE · ' + roleLabel + '</div><div style="font-size:12px;color:var(--text2)">' + completed + ' tasks completed. ' + (completionRate >= 80 ? 'Strong progress.' : 'Room for improvement.') + '</div></div>' +
+        '<div id="tasks-recs-out" style="display:none;margin-top:10px;padding:10px;background:var(--green-dim);border-radius:8px;font-size:12px;color:var(--text2);line-height:1.7"></div>' +
+        '<button class="btn btn-ghost" style="font-size:11px;margin-top:8px;width:100%" onclick="runModuleRecs(\'tasks\',this)">🤖 Generate Recommendations</button>';
+    }
+    
+    // ── Update Analysis ──
+    const analysisCard = document.querySelector('#view-tasks .card[style*="border-left:3px solid var(--purple)"]');
+    if (analysisCard) {
+      analysisCard.innerHTML = 
+        '<div class="card-title" style="color:var(--purple)">🧠 Analysis</div>' +
+        '<div style="font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:10px">' +
+        (total > 0 ? 'Task pipeline active. ' + pending + ' tasks are queued for action, with ' + criticalCount + ' critical priority.' : 'No active tasks in pipeline. Add tasks to begin execution tracking.') +
+        '</div>' +
+        '<div id="tasks-analysis-out" style="display:none;padding:10px;background:var(--purple-dim);border-radius:8px;font-size:12px;color:var(--text2);line-height:1.7"></div>' +
+        '<button class="btn btn-ghost" style="font-size:11px;width:100%" onclick="runModuleAnalysis(\'tasks\',\'StratRoom Task Execution Agent: ' + total + ' total tasks, ' + pending + ' pending executive approval, ' + criticalCount + ' critical, ' + completionRate + '% completion rate. Analyse the bottleneck and recommend a task governance framework.\',this)">🤖 Run Deep Analysis</button>';
+    }
+    
+    // ── Update Actions & Tasks ──
+    const actionsCard = document.querySelector('#view-tasks .card[style*="border-left:3px solid var(--amber)"]');
+    if (actionsCard) {
+      actionsCard.innerHTML = 
+        '<div class="card-title" style="color:var(--amber)">⚡ Actions &amp; Tasks — AI Generated</div>' +
+        (total > 0 ? 
+        '<div style="padding:9px 11px;background:var(--amber-dim);border:1px solid var(--amber-border);border-radius:8px;margin-bottom:5px"><div style="font-size:10px;font-weight:700;color:var(--amber);font-family:monospace;margin-bottom:3px">⟡ TASK AGENT · WEEKLY</div><div style="font-size:12px;font-weight:500;color:var(--text);margin-bottom:3px">Schedule exec task review cadence — 30 min weekly</div><div style="font-size:11px;color:var(--text3)">👤 ' + roleLabel + ' · 🟠 High · Recurring</div></div>' :
+        '<div style="padding:9px 11px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:5px"><div style="font-size:12px;color:var(--text3);text-align:center;">No pending actions required</div></div>'
+        ) +
+        '<div id="tasks-tasks-out" style="display:none;margin-top:10px;padding:10px;background:var(--amber-dim);border-radius:8px;font-size:12px;color:var(--text2);line-height:1.7"></div>' +
+        '<button class="btn btn-primary" style="font-size:11px;width:100%;margin-top:4px" onclick="generateModuleTasks(\'tasks\',this)">⚡ Generate AI Tasks for Exec Approval</button>';
     }
 
     // ── Check for stalled tasks and show AI stall alert ──

@@ -109,6 +109,8 @@ async def get_org_full(
         if rg:
             regions[rg] += 1
 
+    user_role_map = {str(r.get("emp_id")): r for r in user_rows_raw if r.get("emp_id")}
+
     by_id = {}
     for m in members:
         node_id = str(m["id"])
@@ -117,19 +119,23 @@ async def get_org_full(
         dept_display = raw_dept.replace("_", " ").strip()
         if dept_display:
             dept_display = " ".join(w.capitalize() for w in dept_display.split())
+        ur = user_role_map.get(node_id, {})
+        title = m.get("title") or ur.get("designation") or ur.get("role") or ""
+        
         node = {
             "id": node_id,
             "name": (m.get("name") or "").strip(),
-            "title": m.get("title") or "",
+            "title": title,
             "dept": _to_slug(m.get("dept")),
             "dept_name": dept_display or "N/A",
             "region": m.get("region") or "",
+            "location": m.get("region") or "",
             "level": m.get("level") or "",
             "headcount": 1,
             "children": [],
-            "user_id": None,
-            "email": None,
-            "role": None,
+            "user_id": ur.get("emp_id"),
+            "email": ur.get("email_address"),
+            "role": ur.get("role"),
         }
         by_id[node_id] = node
 
@@ -271,6 +277,9 @@ async def get_org_tree(
     members = await _fetch_employees(mysql_org_id)
     total_headcount = len(members)
 
+    user_rows_raw = await _fetch_users(mysql_org_id)
+    user_role_map = {str(r.get("emp_id")): r for r in user_rows_raw if r.get("emp_id")}
+
     by_id = {}
     for m in members:
         node_id = str(m["id"])
@@ -278,12 +287,19 @@ async def get_org_tree(
         dept_display = raw_dept.replace("_", " ").strip()
         if dept_display:
             dept_display = " ".join(w.capitalize() for w in dept_display.split())
+        ur = user_role_map.get(node_id, {})
+        title = m.get("title") or ur.get("designation") or ur.get("role") or ""
+        
         node = {
             "id": node_id, "name": (m.get("name") or "").strip(),
-            "title": m.get("title") or "", "dept": _to_slug(m.get("dept")),
+            "title": title, "dept": _to_slug(m.get("dept")),
             "dept_name": dept_display or "N/A",
-            "region": m.get("region") or "", "level": m.get("level") or "",
+            "region": m.get("region") or "", "location": m.get("region") or "",
+            "level": m.get("level") or "",
             "headcount": 1, "children": [],
+            "user_id": ur.get("emp_id"),
+            "email": ur.get("email_address"),
+            "role": ur.get("role"),
         }
         by_id[node_id] = node
 

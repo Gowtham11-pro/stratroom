@@ -20266,7 +20266,7 @@ function sendModuleChatTo(moduleId, inputId, messagesId) {
             if (el) { el.textContent = count; }
             // Also update task header if tasks page is visible
             var hdr = document.querySelector('#view-tasks .section-label');
-            if (hdr && pending > 0) hdr.textContent = 'PENDING EXECUTIVE ACTIONS \u2014 ' + pending + ' ITEMS REQUIRING APPROVAL';
+            if (hdr) hdr.textContent = 'PENDING EXECUTIVE ACTIONS \u2014 ' + pending + ' ITEMS REQUIRING APPROVAL';
         }).catch(function() {});
         // Keep localStorage size display
         var totalSize = 0;
@@ -22362,6 +22362,16 @@ if (document.readyState === 'loading') {
     let tasks = await loadTasksFromBackend();
     if (!tasks) tasks = [];
 
+    window._taskMap = window._taskMap || {};
+    tasks.forEach(t => { if (t && t.id) window._taskMap[t.id] = t; });
+
+    function esc(s) {
+      if (s == null) return '';
+      return String(s).replace(/[&<>'"]/g, function(m) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;'}[m];
+      });
+    }
+
     const role = localStorage.getItem('user_role') || 'member';
     const isAdmin = (role === 'CEO' || role === 'admin' || role === 'Admin');
     const isManager = (role === 'manager' || role === 'Manager');
@@ -22533,8 +22543,8 @@ if (document.readyState === 'loading') {
             '</div>' +
             '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">' +
               '<button class="btn btn-primary" style="font-size:12px;font-weight:700;padding:7px 18px;border-radius:8px;background:#0091ff;color:#fff;border:none;cursor:pointer;box-shadow:0 3px 10px rgba(0,145,255,0.3);" onclick="approveTask(this, ' + t.id + ')">Approve</button>' +
-              (!isMember ? '<button onclick=\'openTaskModal(' + JSON.stringify({id:t.id,title:t.title||t.Name||t.task_name,description:t.description,priority:t.priority,status:t.status,due_date:t.due_date||t.dueDate}).replace(/'/g,"&#39;") + ')\' style="padding:7px 12px;border:1px solid var(--border,#334155);border-radius:8px;background:var(--surface,#1e293b);color:var(--text2,#cbd5e1);font-size:11px;cursor:pointer;">Edit</button>' : '') +
-              (isAdmin ? '<button onclick="deleteTask(' + t.id + ',\'' + (t.title||t.Name||t.task_name||'').replace(/'/g,"\\'") + '\')" style="padding:7px 12px;border:1px solid var(--red-border);border-radius:8px;background:var(--red-dim);color:var(--red);font-size:11px;cursor:pointer;">Delete</button>' : '') +
+              (!isMember ? '<button onclick="openTaskModal(window._taskMap[' + t.id + '])" style="padding:7px 12px;border:1px solid var(--border,#334155);border-radius:8px;background:var(--surface,#1e293b);color:var(--text2,#cbd5e1);font-size:11px;cursor:pointer;">Edit</button>' : '') +
+              (isAdmin ? '<button onclick="deleteTask(' + t.id + ')" style="padding:7px 12px;border:1px solid var(--red-border);border-radius:8px;background:var(--red-dim);color:var(--red);font-size:11px;cursor:pointer;">Delete</button>' : '') +
             '</div>' +
           '</div>';
         }).join('');

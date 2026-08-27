@@ -78,6 +78,7 @@ An **interceptor** (line ~20794-20799) blocks mechanism #1 when authenticated fo
 - Container PYTHONPATH = `/app/backend` — imports use `from app.main import app`.
 - PostgreSQL container was removed in July 2026. The `db.py` module still has a PG session factory for backward compatibility but gracefully yields `None` if PG is unavailable.
 - `scorecards/{id}` (with ID) goes to MySQL `score_card`; `/scorecards` (bare) goes to MySQL `scorecard_kpis`.
+- `/scorecards/balanced` is dual-scope: no param → SKL reference dataset (`org_id=4`, `kpi_id LIKE 'SKL-K%'`, byte-compatible legacy math); `?scorecard_id=N` → that scorecard's REAL data via the FK chain `score_card.page_id` (sibling perspective rows) ← `objectives.score_card_id` ← `kpi.objective_id` (there is NO `kpi.scorecard_id` column). Perspective/objective names+weights come from the definition blobs; `active` is 0 on every row (live included) — never filter on it. Row 3201 has an empty `score_name`; title falls back to any named sibling. Also: `score_card` has NO `org_id` column, so `/scorecards/list` and the SKL perspective-weight loader silently no-op (weights fall back to 1.0 — kept deliberately so the default `overall_score` stays stable).
 - SWOT/PESTEL: GET reads MySQL, POST/DELETE writes MySQL. Projects: GET reads MySQL, CRUD writes MySQL.
 
 ## Verification

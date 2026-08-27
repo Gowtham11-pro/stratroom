@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from app.core.deps import require_role
+from app.core.rbac import _record_owner_emp_id, enforce_record_access, filter_visible_rows
 from app.services.java_bridge import bridge
 
 router = APIRouter(prefix="/decisions", tags=["decisions"])
@@ -33,7 +34,8 @@ class DecisionUpdate(BaseModel):
 async def list_decisions(ctx: dict = Depends(require_role("member"))):
     data = await bridge.get(bridge.db_service, "/decisions")
     rows = data if isinstance(data, list) else data.get("decisions", data.get("list", []))
-    return {"decisions": rows}
+    visible = await filter_visible_rows(ctx, rows)
+    return {"decisions": visible}
 
 
 @router.post("", status_code=201)
@@ -77,13 +79,14 @@ async def update_decision(
     ctx: dict = Depends(require_role("member")),
 ):
     rows = await bridge._mysql(
-        "SELECT id, decision_value, status, priority FROM decisions WHERE id = %s",
+        "SELECT id, decision_value, status, priority, owner FROM decisions WHERE id = %s",
         (decision_id,),
     )
     if not rows:
         raise HTTPException(status_code=404, detail=f"Decision {decision_id} not found")
 
     row = rows[0]
+    await enforce_record_access(ctx, _record_owner_emp_id(row))
     blob = bridge._parse_json_col(row, "decision_value")
 
     status = req.status if req.status is not None else (row.get("status") or "Pending")
@@ -113,10 +116,12 @@ async def delete_decision(
     ctx: dict = Depends(require_role("member")),
 ):
     rows = await bridge._mysql(
-        "SELECT id FROM decisions WHERE id = %s",
+        "SELECT id, owner FROM decisions WHERE id = %s",
         (decision_id,),
     )
     if not rows:
         raise HTTPException(status_code=404, detail=f"Decision {decision_id} not found")
+    await enforce_record_access(ctx, _record_owner_emp_id(rows[0]))
     await bridge.delete(bridge.db_service, f"/decisions/{decision_id}")
     return {"decision_id": decision_id, "status": "deleted"}
+

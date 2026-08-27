@@ -5,6 +5,7 @@ from pydantic import BaseModel, field_validator
 
 from app.core.deps import require_role
 from app.core.config import settings
+from app.core.rbac import filter_visible_rows
 from app.services.java_bridge import bridge
 
 logger = logging.getLogger("stratroom.swot")
@@ -51,6 +52,7 @@ async def list_swot_items(
     try:
         data = await bridge.get(bridge.db_service, "/swotList")
         rows = data if isinstance(data, list) else data.get("items", data.get("list", []))
+        rows = await filter_visible_rows(ctx, rows)
         quadrant_order = {"strength": 1, "weakness": 2, "opportunity": 3, "threat": 4}
         items = []
         for r in rows:
@@ -66,6 +68,7 @@ async def list_swot_items(
         logger.warning("Failed to query SWOT via bridge: %s", exc)
         items = []
     return {"items": items}
+
 
 
 @router.post("/swot")

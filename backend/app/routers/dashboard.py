@@ -149,12 +149,68 @@ async def _fetch_active_emp_count():
         return 0
 
 
+def _parse_date_bounds(date_range_str: str):
+    """Extracts (start_date_str, end_date_str) from date_range parameter."""
+    if not date_range_str or not str(date_range_str).strip():
+        return None, None
+    import re
+    matches = re.findall(r'(\d{4})-(\d{1,2})(?:-(\d{1,2}))?', str(date_range_str))
+    if not matches:
+        return None, None
+    try:
+        yr1, mo1 = int(matches[0][0]), int(matches[0][1])
+        day1 = int(matches[0][2]) if matches[0][2] else 1
+        start_date = f"{yr1:04d}-{mo1:02d}-{day1:02d}"
+
+        if len(matches) > 1:
+            yr2, mo2 = int(matches[1][0]), int(matches[1][1])
+            day2 = int(matches[1][2]) if matches[1][2] else 28
+            if mo2 in [1, 3, 5, 7, 8, 10, 12]: day2 = 31
+            elif mo2 in [4, 6, 9, 11]: day2 = 30
+            elif mo2 == 2: day2 = 29 if yr2 % 4 == 0 else 28
+            end_date = f"{yr2:04d}-{mo2:02d}-{day2:02d}"
+        else:
+            end_date = f"{yr1:04d}-{mo1:02d}-31"
+        return start_date, end_date
+    except Exception:
+        return None, None
+
+
+def _filter_items_by_date_range(items: list, start_date: str, end_date: str) -> list:
+    """Filters list of dict items by date fields if start_date and end_date are provided."""
+    if not start_date or not end_date or not items:
+        return items
+    filtered = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        d_val = (
+            item.get("date") or item.get("dueDate") or item.get("due_date") or 
+            item.get("real_date_from") or item.get("created_at") or 
+            item.get("meetingDate") or item.get("auditDate") or item.get("timestamp")
+        )
+        if not d_val:
+            filtered.append(item)
+            continue
+        d_str = str(d_val)[:10]
+        if (start_date <= d_str <= end_date) or (d_str[:7] >= start_date[:7] and d_str[:7] <= end_date[:7]):
+            filtered.append(item)
+    return filtered
+
+
 @router.get("/stats")
-async def get_stats(ctx: dict = Depends(require_role("member"))):
+@router.get("/summary")
+async def get_stats(
+    date_range: str = None,
+    year: int = None,
+    ctx: dict = Depends(require_role("member"))
+):
     emp_id = ctx["user_id"]
     email = ctx.get("email")
     is_admin = ctx["is_admin"]
     role = ctx["rbac_role"]
+
+    start_date, end_date = _parse_date_bounds(date_range)
 
     # Resolve MySQL org context
     mysql_user = None
@@ -167,7 +223,7 @@ async def get_stats(ctx: dict = Depends(require_role("member"))):
     mysql_org_id = mysql_user["org_id"] if mysql_user else 0
     mysql_emp_id = mysql_user["emp_id"] if mysql_user else None
 
-    # ── Parallel data fetch (replaces 10+ sequential calls) ──
+    # ── Parallel data fetch ──
     (
         risk_rows,
         scorecard_rows,
@@ -192,10 +248,26 @@ async def get_stats(ctx: dict = Depends(require_role("member"))):
         _fetch_active_emp_count(),
     )
 
-    # ── RBAC filtering: scope data to caller's visibility ──
+    # ── RBAC filtering ──
     risk_rows = await filter_visible_rows(ctx, risk_rows)
     task_list = await filter_visible_rows(ctx, task_list)
     init_list = await filter_visible_rows(ctx, init_list)
+    inc_list = await filter_visible_rows(ctx, inc_list)
+    audit_list = await filter_visible_rows(ctx, audit_list)
+    comp_list = await filter_visible_rows(ctx, comp_list)
+    budget_list = await filter_visible_rows(ctx, budget_list)
+    meeting_list = await filter_visible_rows(ctx, meeting_list)
+    scorecard_rows = await filter_visible_rows(ctx, scorecard_rows)
+
+    # ── Global Date Range filtering ──
+    if start_date and end_date:
+        task_list = _filter_items_by_date_range(task_list, start_date, end_date)
+        init_list = _filter_items_by_date_range(init_list, start_date, end_date)
+        inc_list = _filter_items_by_date_range(inc_list, start_date, end_date)
+        audit_list = _filter_items_by_date_range(audit_list, start_date, end_date)
+        comp_list = _filter_items_by_date_range(comp_list, start_date, end_date)
+        budget_list = _filter_items_by_date_range(budget_list, start_date, end_date)
+        meeting_list = _filter_items_by_date_range(meeting_list, start_date, end_date)
 
     # ── 1. RISKS → Card 3 ──
     total_risks = len(risk_rows)
@@ -218,18 +290,64 @@ async def get_stats(ctx: dict = Depends(require_role("member"))):
     # ── 2. SCORECARDS / KPI HEALTH → Card 1 ──
     total_scorecards = len(scorecard_rows)
     perspective_data = {}
-    for s in scorecard_rows:
-        p = s.get("perspective", "General")
-        if p not in perspective_data:
-            perspective_data[p] = {"total": 0, "on_track": 0, "at_risk": 0, "critical": 0}
-        perspective_data[p]["total"] += 1
-        st = (s.get("status") or "").lower().strip()
-        if st in ("on-track", "on track", "completed", "on_target"):
-            perspective_data[p]["on_track"] += 1
-        elif st in ("at-risk", "at risk", "overdue", "warning"):
-            perspective_data[p]["at_risk"] += 1
-        elif st in ("critical", "off-track", "off_track", "missed"):
-            perspective_data[p]["critical"] += 1
+
+    if start_date and end_date:
+        snaps = []
+        try:
+            snaps = await bridge._mysql(
+                "SELECT id, kpi_id, nodeKey, period, acutal, target "
+                "FROM kpi_snapshot "
+                "WHERE ((real_date_from >= %s AND real_date_from <= %s) "
+                "   OR (real_date_to >= %s AND real_date_to <= %s))",
+                (start_date, end_date, start_date, end_date)
+            ) or []
+        except Exception:
+            pass
+
+        if not snaps:
+            try:
+                snaps = await bridge._mysql(
+                    "SELECT id, node_key, mtd_actual as acutal, mtd_target as target "
+                    "FROM org_kpi_details "
+                    "WHERE ((real_date_from >= %s AND real_date_from <= %s) "
+                    "   OR (real_date_to >= %s AND real_date_to <= %s))",
+                    (start_date, end_date, start_date, end_date)
+                ) or []
+            except Exception:
+                pass
+
+        if snaps:
+            kpi_persp_map = {str(s.get("id")): s.get("perspective", "General") for s in scorecard_rows}
+            for s in snaps:
+                k_key = str(s.get("kpi_id") or s.get("nodeKey") or s.get("node_key") or "")
+                p = kpi_persp_map.get(k_key, "General")
+                if p not in perspective_data:
+                    perspective_data[p] = {"total": 0, "on_track": 0, "at_risk": 0, "critical": 0}
+                perspective_data[p]["total"] += 1
+
+                act = _get_json_val(s, "acutal", default=0.0)
+                tar = _get_json_val(s, "target", default=0.0)
+
+                if tar > 0 and act >= tar:
+                    perspective_data[p]["on_track"] += 1
+                elif tar > 0 and act >= (tar * 0.8):
+                    perspective_data[p]["at_risk"] += 1
+                else:
+                    perspective_data[p]["critical"] += 1
+
+    if not perspective_data:
+        for s in scorecard_rows:
+            p = s.get("perspective", "General")
+            if p not in perspective_data:
+                perspective_data[p] = {"total": 0, "on_track": 0, "at_risk": 0, "critical": 0}
+            perspective_data[p]["total"] += 1
+            st = (s.get("status") or "").lower().strip()
+            if st in ("on-track", "on track", "completed", "on_target"):
+                perspective_data[p]["on_track"] += 1
+            elif st in ("at-risk", "at risk", "overdue", "warning"):
+                perspective_data[p]["at_risk"] += 1
+            elif st in ("critical", "off-track", "off_track", "missed"):
+                perspective_data[p]["critical"] += 1
 
     # ── 3. INCIDENTS → Card 7 ──
     total_incidents = len(inc_list)

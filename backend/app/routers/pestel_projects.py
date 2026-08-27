@@ -5,6 +5,7 @@ from pydantic import BaseModel, field_validator
 
 from app.core.deps import require_role
 from app.core.config import settings
+from app.core.rbac import _record_owner_emp_id, enforce_record_access, filter_visible_rows
 from app.services.java_bridge import bridge
 
 logger = logging.getLogger("stratroom.pestel_projects")
@@ -120,6 +121,7 @@ async def list_pestel_items(
     try:
         data = await bridge.get(bridge.db_service, "/pestelList")
         rows = data if isinstance(data, list) else data.get("items", data.get("list", []))
+        rows = await filter_visible_rows(ctx, rows)
         category_order = {"political": 1, "economic": 2, "social": 3, "technology": 4, "environmental": 5, "legal": 6}
         items = []
         for r in rows:
@@ -177,6 +179,7 @@ async def list_projects(
     try:
         data = await bridge.get(bridge.db_service, "/projectsList")
         rows = data if isinstance(data, list) else data.get("projects", data.get("list", []))
+        rows = await filter_visible_rows(ctx, rows)
         projects = []
         for i, r in enumerate(rows):
             projects.append({
@@ -225,6 +228,11 @@ async def update_project(
     payload: ProjectCreate,
     ctx: dict = Depends(require_role("manager")),
 ):
+    existing = await bridge.get(bridge.db_service, f"/projectsList/{project_id}")
+    if existing:
+        rec = existing[0] if isinstance(existing, list) else existing
+        await enforce_record_access(ctx, _record_owner_emp_id(rec))
+
     mysql_status = PG_STATUS_TO_MYSQL_STATUS.get(payload.status, "Not Started")
     await bridge.put(bridge.db_service, f"/projectsList/{project_id}", json={
         "projectName": payload.name,
@@ -242,8 +250,15 @@ async def delete_project(
     project_id: int,
     ctx: dict = Depends(require_role("admin")),
 ):
+    existing = await bridge.get(bridge.db_service, f"/projectsList/{project_id}")
+    if not existing:
+        raise HTTPException(status_code=404, detail="Project not found")
+    rec = existing[0] if isinstance(existing, list) else existing
+    await enforce_record_access(ctx, _record_owner_emp_id(rec))
+
     try:
         await bridge.delete(bridge.db_service, f"/projectsList/{project_id}")
     except Exception:
         raise HTTPException(status_code=404, detail="Project not found")
     return {"ok": True}
+

@@ -15,14 +15,8 @@ class Settings:
     ENABLE_DOCS: bool = os.getenv("ENABLE_DOCS", "true").lower() in ("true", "1", "yes")
 
     # ── Database ──
-    DATABASE_URL: str = os.getenv(
-        "DATABASE_URL", "postgresql+asyncpg://stratroom:stratroom_pw@db:5432/stratroom"
-    )
-    DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "10"))
-    DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "20"))
-    DB_POOL_TIMEOUT: int = int(os.getenv("DB_POOL_TIMEOUT", "30"))
-    DB_POOL_RECYCLE: int = int(os.getenv("DB_POOL_RECYCLE", "1800"))
-    DB_POOL_PRE_PING: bool = os.getenv("DB_POOL_PRE_PING", "true").lower() in ("true", "1", "yes")
+    # MySQL-only since July 2026: all data access goes through
+    # app.services.java_bridge (MYSQL_* settings below).
 
     # ── Authentication ──
     JWT_SECRET: str = os.getenv("JWT_SECRET", "")

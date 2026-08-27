@@ -135,7 +135,6 @@ async def ml_full_forecast(
         table_map = {
             "risks": "risks",
             "incidents": "incidents",
-            "scorecards": "scorecards",
             "budget_lines": "budgets",
             "tasks": "tasks",
             "projects": "projects",

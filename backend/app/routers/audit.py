@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 
 from app.core.deps import require_role
+from app.core.rbac import _record_owner_emp_id, enforce_record_access, filter_visible_rows
 from app.services.java_bridge import bridge
 
 logger = logging.getLogger("stratroom.audit")
@@ -84,7 +85,8 @@ class AuditFindingUpdate(BaseModel):
 async def list_audit_findings(ctx: dict = Depends(require_role("member"))):
     data = await bridge.get(bridge.db_service, "/auditManagementList")
     rows = data if isinstance(data, list) else data.get("findings", data.get("auditManagement", data.get("list", [])))
-    return {"findings": rows}
+    visible = await filter_visible_rows(ctx, rows)
+    return {"findings": visible}
 
 
 @router.get("/audit/{finding_id}")
@@ -95,7 +97,9 @@ async def get_audit_finding(
     data = await bridge.get(bridge.db_service, f"/auditManagement/{finding_id}")
     if not data:
         raise HTTPException(status_code=404, detail="Finding not found")
-    return data if isinstance(data, dict) else {"finding": data}
+    record = data[0] if isinstance(data, list) and data else (data if isinstance(data, dict) else {"finding": data})
+    await enforce_record_access(ctx, _record_owner_emp_id(record))
+    return record
 
 
 @router.post("/audit", status_code=201)
@@ -128,6 +132,8 @@ async def update_audit_finding(
     existing = await bridge.get(bridge.db_service, f"/auditManagement/{finding_id}")
     if not existing:
         raise HTTPException(status_code=404, detail="Finding not found")
+    record = existing[0] if isinstance(existing, list) and existing else (existing if isinstance(existing, dict) else {})
+    await enforce_record_access(ctx, _record_owner_emp_id(record))
 
     body = {"id": finding_id}
     if payload.title is not None:
@@ -156,7 +162,10 @@ async def delete_audit_finding(
     existing = await bridge.get(bridge.db_service, f"/auditManagement/{finding_id}")
     if not existing:
         raise HTTPException(status_code=404, detail="Finding not found")
+    record = existing[0] if isinstance(existing, list) and existing else (existing if isinstance(existing, dict) else {})
+    await enforce_record_access(ctx, _record_owner_emp_id(record))
 
     await bridge.delete(bridge.db_service, f"/auditManagement/{finding_id}")
     logger.info("Audit finding deleted: id=%d", finding_id)
     return {"ok": True}
+

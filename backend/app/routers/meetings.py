@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from app.core.deps import require_role
+from app.core.rbac import filter_visible_rows
 from app.services.java_bridge import bridge
 
 router = APIRouter(tags=["meetings"])
@@ -18,4 +19,6 @@ async def list_meetings(ctx: dict = Depends(require_role("member"))):
         data = await bridge.get(bridge.db_service, f"/meetingManagementList/{emp_id}")
 
     rows = data if isinstance(data, list) else data.get("meetings", data.get("list", []))
-    return {"meetings": rows}
+    visible = await filter_visible_rows(ctx, rows)
+    return {"meetings": visible}
+

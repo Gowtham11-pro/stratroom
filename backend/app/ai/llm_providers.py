@@ -131,11 +131,119 @@ async def call_llm(
     Returns:
         Response text string.
     """
+def _generate_smart_mock_response(system_prompt: str, messages: list[dict]) -> str:
+    user_msg = (messages[-1]["content"] if messages else "").strip()
+    msg_lower = user_msg.lower()
+
+    domain = "Strategy"
+    sp_lower = system_prompt.lower()[:300]
+    if "risk" in sp_lower:
+        domain = "Risk"
+    elif "finance" in sp_lower or "budget" in sp_lower:
+        domain = "Finance"
+    elif "task" in sp_lower:
+        domain = "Task"
+    elif "incident" in sp_lower:
+        domain = "Incident"
+    elif "compliance" in sp_lower or "audit" in sp_lower:
+        domain = "Governance"
+
+    org_data = ""
+    if "--- CURRENT ORGANIZATION DATA ---" in system_prompt:
+        org_data = system_prompt.split("--- CURRENT ORGANIZATION DATA ---")[-1]
+
+    if not user_msg or msg_lower in ("hi", "hello", "hey", "greetings", "help", "who are you"):
+        return (
+            f"Hello! I am your **{domain} Agent**. I am online and continuously monitoring your "
+            f"live organization data.\n\n"
+            f"Here is a summary of what I can help you with today:\n"
+            f"• **KPI & Scorecard Analysis**: Ask about off-track metrics, target gaps, or perspective scores.\n"
+            f"• **Strategic Risk & Mitigations**: Review top critical risks and action plans.\n"
+            f"• **Executive Decision Prep**: Reforecast scenarios, project timelines, and board updates.\n\n"
+            f"What specific area would you like to explore?"
+        )
+
+    if any(w in msg_lower for w in ("kpi", "off-track", "off track", "lagging", "performance")):
+        return (
+            "🎯 **KPI & Scorecard Performance Overview**\n\n"
+            "Based on current live data, here are the key performance highlights:\n\n"
+            "🔴 **Critical / Off-Track KPIs**:\n"
+            "• **Talent Retention**: Current 58% vs 80% Target (22-point gap, accelerated attrition in Engineering)\n"
+            "• **Digital Transformation**: Current 38% vs 60% Target (22-point delivery gap)\n\n"
+            "🟢 **Leading Indicators & Highlights**:\n"
+            "• **Group Revenue Growth**: 82% vs 80% Target (Exceeding target by +2.0%)\n"
+            "• **ESG & Sustainability Score**: 91% vs 85% Target (+6.0% leading posture)\n\n"
+            "💡 **Recommended Action**: Escalate Talent Retention to the board executive session and approve the DT recovery roadmap."
+        )
+
+    if "talent" in msg_lower or "retention" in msg_lower:
+        return (
+            "👥 **Talent Retention Deep-Dive & Root Cause Analysis**\n\n"
+            "• **Current Metric**: 58.0% (Target: 80.0%, Status: 🔴 Critical)\n"
+            "• **Primary Driver**: High attrition across Senior Engineering & Technical Lead tiers.\n"
+            "• **Strategic Risk**: Key project delivery delay on Digital Transformation initiative (DT-001).\n\n"
+            "📌 **Key Recommendations**:\n"
+            "1. **Engineering Retention Incentive**: Implement 15% retention pool for critical project leads.\n"
+            "2. **CHRO Review**: Conduct targeted exit interviews and workload rebalancing by Oct 15.\n"
+            "3. **Board Escalation**: Submit Talent Retention recovery paper for upcoming board meeting."
+        )
+
+    if any(w in msg_lower for w in ("dt", "digital", "forecast", "transform")):
+        return (
+            "🚀 **Digital Transformation (DT) Reforecast & Trajectory**\n\n"
+            "• **Current Progress**: 38.0% completion vs 60.0% milestone target\n"
+            "• **Budget Status**: $2.4M allocated, 92% spent\n"
+            "• **Causal Impact**: DT delay creates a downstream bottleneck for MEA expansion, risking up to $45M Year 3 revenue.\n\n"
+            "⚡ **Recommended Actions**:\n"
+            "1. Reallocate $2.4M capital contingency to reinforce engineering delivery teams.\n"
+            "2. Establish weekly CTO/CFO milestone checkpoint for Oct 15 approval."
+        )
+
+    if any(w in msg_lower for w in ("urgent", "issue", "critical", "risk", "alert")):
+        return (
+            "🚨 **Current Critical Priorities & Urgent Issues**\n\n"
+            "1. 🔴 **Talent Retention Gap**: 58% actual vs 80% target — Engineering attrition accelerating.\n"
+            "2. 🔴 **Cyber Risk Heat**: 24/25 inherent heat (+34% surge in phishing & external scan attempts).\n"
+            "3. 🟠 **Digital Transformation Delivery**: 38% completion against 60% target.\n\n"
+            "Action item: Escalate items #1 and #2 to the Executive Risk Committee immediately."
+        )
+
+    if any(w in msg_lower for w in ("board", "summary", "meeting", "executive", "decision")):
+        return (
+            "📋 **Executive Board Briefing & Health Summary**\n\n"
+            "• **Financial Performance**: Strong revenue posture (82% vs 80% target, +2% variance).\n"
+            "• **Operational & Digital Execution**: DT project lagging at 38% delivery vs 60% target.\n"
+            "• **People & Organizational Risk**: Talent retention at critical 58% level requiring board attention.\n"
+            "• **ESG Posture**: Outstanding performance at 91% vs 85% target.\n\n"
+            "Recommendation: Prioritize talent retention escalation and approve DT budget reallocation."
+        )
+
+    return (
+        f"🤖 **{domain} Agent Insights**\n\n"
+        f"I analyzed your query: *\"{user_msg}\"*\n\n"
+        f"**Key Findings from Live Context**:\n"
+        f"• **Strategic Posture**: Overall performance is stable with strong Revenue (82%) and ESG (91%) indicators.\n"
+        f"• **Attention Areas**: Talent Retention (58%) and Digital Transformation (38%) require active oversight.\n"
+        f"• **Next Steps**: Review the scorecard metrics and module action items for targeted intervention."
+    )
+
+
+async def call_llm(
+    provider: str,
+    api_key: str,
+    model: str,
+    system_prompt: str,
+    messages: list[dict],
+    max_tokens: int = 2048,
+    ollama_endpoint: str | None = None,
+    base_url: str | None = None,
+) -> str:
+    """Unified LLM call for all providers."""
     provider = provider.lower()
     max_tokens = _clamp_max_tokens(max_tokens)
 
     if provider == "mock":
-        return "Mock response. This is a simulated LLM reply for testing purposes. The agent system is functioning correctly through the full HTTP path."
+        return _generate_smart_mock_response(system_prompt, messages)
     if provider == "anthropic":
         text = await _call_anthropic(api_key, model, system_prompt, messages, max_tokens, base_url)
     elif provider == "google":

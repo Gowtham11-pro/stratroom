@@ -282,15 +282,23 @@ async def delete_task(
 async def approve_all_tasks(
     ctx: dict = Depends(require_role("member")),
 ):
-    """Approve all pending/in_progress tasks by updating status to completed in MySQL."""
+    """Approve all pending/in_progress tasks for the caller by updating status to completed in MySQL."""
+    emp_id = ctx.get("user_id")
+    is_admin = ctx.get("is_admin", False)
     try:
-        await bridge._mysql(
-            "UPDATE task_details SET status = 'completed' WHERE status != 'completed'"
-        )
-        return {"status": "success", "message": "All pending tasks approved successfully"}
+        if is_admin:
+            await bridge._mysql(
+                "UPDATE task_details SET status = 'completed' WHERE status != 'completed'"
+            )
+        else:
+            await bridge._mysql(
+                "UPDATE task_details SET status = 'completed' WHERE owner = %s AND status != 'completed'",
+                (emp_id,),
+            )
+        return {"status": "success", "message": "Pending tasks approved successfully"}
     except Exception as exc:
-        logger.warning("Failed to approve all tasks: %s", exc)
-        return {"status": "success", "message": "All pending tasks approved"}
+        logger.warning("Failed to approve tasks: %s", exc)
+        return {"status": "success", "message": "Pending tasks approved"}
 
 
 @router.post("/tasks/{task_id}/approve")
@@ -298,7 +306,14 @@ async def approve_single_task(
     task_id: int,
     ctx: dict = Depends(require_role("member")),
 ):
-    """Approve a single task by updating status to completed in MySQL."""
+    """Approve a single task by updating status to completed in MySQL after enforcing task access."""
+    data = await bridge.get(bridge.db_service, f"/task/{task_id}")
+    if not data:
+        raise HTTPException(status_code=404, detail="Task not found")
+    record = data[0] if isinstance(data, list) and data else (data if isinstance(data, dict) else {})
+    from app.core.rbac import _record_owner_emp_id
+    await enforce_task_access(ctx, _record_owner_emp_id(record))
+
     try:
         await bridge._mysql(
             "UPDATE task_details SET status = 'completed' WHERE id = %s",
@@ -308,3 +323,4 @@ async def approve_single_task(
     except Exception as exc:
         logger.warning("Failed to approve task %s: %s", task_id, exc)
         return {"status": "success", "message": "Task approved"}
+

@@ -116,8 +116,8 @@ def test_requirements_exists():
 def test_dockerfile_exists():
     assert os.path.isfile(os.path.join(BACKEND, "Dockerfile")), "Dockerfile missing"
 
-def test_init_sql_exists():
-    assert os.path.isfile(os.path.join(DB_DIR, "01_init.sql")), "init.sql missing"
+def test_mysql_ddl_exists():
+    assert os.path.isfile(os.path.join(DB_DIR, "16_ai_tables_mysql.sql")), "mysql ddl missing"
 
 def test_docker_compose_exists():
     assert os.path.isfile(os.path.join(ROOT, "docker-compose.yml")), "docker-compose.yml missing"
@@ -201,7 +201,8 @@ def test_import_deps():
     assert callable(get_current_user)
 
 def test_import_db():
-    from app.core.db import get_db, engine, SessionLocal, check_db_health
+    # MySQL-only since July 2026: db.py gracefully yields None, no engine/SessionLocal
+    from app.core.db import get_db, check_db_health
     assert callable(get_db)
     assert callable(check_db_health)
 
@@ -424,67 +425,70 @@ def test_documents_router_endpoints():
 
 
 # ════════════════════════════════════════════════════════════════
-# CATEGORY 6: DATABASE SCHEMA
+# CATEGORY 6: DATABASE SCHEMA (MySQL-only since July 2026)
 # ════════════════════════════════════════════════════════════════
-def test_sql_has_organizations_table():
-    sql = open(os.path.join(DB_DIR, "01_init.sql")).read()
-    assert "CREATE TABLE IF NOT EXISTS organizations" in sql
-
-def test_sql_has_users_table():
-    sql = open(os.path.join(DB_DIR, "01_init.sql")).read()
-    assert "CREATE TABLE IF NOT EXISTS users" in sql
-
-def test_sql_has_risks_table():
-    sql = open(os.path.join(DB_DIR, "01_init.sql")).read()
-    assert "CREATE TABLE IF NOT EXISTS risks" in sql
-
-def test_sql_has_incidents_table():
-    sql = open(os.path.join(DB_DIR, "01_init.sql")).read()
-    assert "CREATE TABLE IF NOT EXISTS incidents" in sql
-
-def test_sql_has_initiatives_table():
-    sql = open(os.path.join(DB_DIR, "01_init.sql")).read()
-    assert "CREATE TABLE IF NOT EXISTS initiatives" in sql
-
-def test_sql_has_seed_org():
-    sql = open(os.path.join(DB_DIR, "01_init.sql")).read()
-    assert "INSERT INTO organizations" in sql
-
-def test_sql_has_seed_user():
-    sql = open(os.path.join(DB_DIR, "01_init.sql")).read()
-    assert "INSERT INTO users" in sql
-    assert "admin@stratroom.com" in sql
-
-def test_sql_has_seed_risks():
-    sql = open(os.path.join(DB_DIR, "01_init.sql")).read()
-    assert "INSERT INTO risks" in sql
-    assert "Supply Chain" in sql
-
-def test_sql_has_seed_incidents():
-    sql = open(os.path.join(DB_DIR, "01_init.sql")).read()
-    assert "INSERT INTO incidents" in sql
-    assert "INC-2026" in sql
-
-def test_sql_has_seed_initiatives():
-    sql = open(os.path.join(DB_DIR, "01_init.sql")).read()
-    assert "INSERT INTO initiatives" in sql
-    assert "Zero Trust" in sql
-
-def test_sql_has_indexes():
-    sql = open(os.path.join(DB_DIR, "01_init.sql")).read()
-    assert "CREATE INDEX" in sql
+def test_mysql_ddl_files_exist():
+    for name in ("13_documents_mysql.sql", "14_agent_conversations_mysql.sql", "16_ai_tables_mysql.sql"):
+        assert os.path.isfile(os.path.join(DB_DIR, name)), f"{name} missing"
 
 def test_sql_has_documents_table():
-    sql = open(os.path.join(DB_DIR, "09_phase_4.sql")).read()
+    sql = open(os.path.join(DB_DIR, "13_documents_mysql.sql")).read()
     assert "CREATE TABLE IF NOT EXISTS documents" in sql
+
+def test_sql_has_agent_conversations_tables():
+    sql = open(os.path.join(DB_DIR, "14_agent_conversations_mysql.sql")).read()
+    assert "CREATE TABLE IF NOT EXISTS agent_conversations" in sql
+    assert "CREATE TABLE IF NOT EXISTS agent_messages" in sql
+
+def test_sql_has_ai_tables():
+    sql = open(os.path.join(DB_DIR, "16_ai_tables_mysql.sql")).read()
+    assert "CREATE TABLE IF NOT EXISTS ai_agent_runs" in sql
+    assert "CREATE TABLE IF NOT EXISTS ai_memory" in sql
+
+def test_sql_no_postgres_artifacts():
+    # Legacy PostgreSQL DDL/psql scripts must stay deleted from backend/db
+    pg_markers = ("SERIAL", "TIMESTAMPTZ", "\\echo", "psql -U", "docker exec stratroom_db")
+    for name in os.listdir(DB_DIR):
+        if not name.endswith(".sql"):
+            continue
+        sql = open(os.path.join(DB_DIR, name), encoding="utf-8", errors="ignore").read()
+        for marker in pg_markers:
+            assert marker not in sql, f"{name} contains PG artifact: {marker}"
+
+def test_migrations_create_user_module_permissions():
+    src = open(os.path.join(BACKEND, "app", "core", "migrations.py")).read()
+    assert "user_module_permissions" in src
+
+def test_db_stub_yields_none():
+    import asyncio
+    from app.core.db import get_db
+
+    async def _run():
+        return [v async for v in get_db()]
+
+    assert asyncio.run(_run()) == [None]
+
+def test_config_has_no_database_url():
+    src = open(os.path.join(BACKEND, "app", "core", "config.py")).read()
+    assert "DATABASE_URL" not in src
+    assert "postgresql" not in src.lower()
+
+def test_env_files_have_no_postgres():
+    for env_name in (".env", ".env.example"):
+        path = os.path.join(ROOT, env_name)
+        if not os.path.isfile(path):
+            continue
+        content = open(path, encoding="utf-8", errors="ignore").read()
+        assert "postgres" not in content.lower(), f"{env_name} still references postgres"
 
 
 # ════════════════════════════════════════════════════════════════
 # CATEGORY 7: DOCKER CONFIGURATION
 # ════════════════════════════════════════════════════════════════
 def test_docker_compose_has_db():
+    # MySQL-only: compose configures external MySQL via env, no DB service
     dc = open(os.path.join(ROOT, "docker-compose.yml")).read()
-    assert "postgres" in dc.lower()
+    assert "MYSQL_HOST" in dc
 
 def test_docker_compose_has_api():
     dc = open(os.path.join(ROOT, "docker-compose.yml")).read()
@@ -492,7 +496,7 @@ def test_docker_compose_has_api():
 
 def test_docker_compose_db_port():
     dc = open(os.path.join(ROOT, "docker-compose.yml")).read()
-    assert "5432" in dc
+    assert "MYSQL_PORT" in dc
 
 def test_docker_compose_api_port():
     dc = open(os.path.join(ROOT, "docker-compose.yml")).read()
@@ -518,9 +522,10 @@ def test_req_has_sqlalchemy():
     req = open(os.path.join(BACKEND, "requirements.txt")).read()
     assert "sqlalchemy" in req
 
-def test_req_has_asyncpg():
+def test_req_has_pymysql():
+    # MySQL-only since July 2026: pymysql replaced asyncpg
     req = open(os.path.join(BACKEND, "requirements.txt")).read()
-    assert "asyncpg" in req
+    assert "pymysql" in req
 
 def test_req_has_bcrypt():
     req = open(os.path.join(BACKEND, "requirements.txt")).read()
@@ -642,7 +647,7 @@ def main():
             test_utils_exists, test_env_example_exists,
             test_dockerignore_exists, test_github_actions_exists,
             test_requirements_exists, test_dockerfile_exists,
-            test_init_sql_exists, test_docker_compose_exists,
+            test_mysql_ddl_exists, test_docker_compose_exists,
             test_inference_script_exists, test_train_script_exists,
             test_model_file_exists, test_frontend_html_exists,
         ]),
@@ -680,12 +685,11 @@ def main():
             test_documents_router_endpoints,
         ]),
         ("DATABASE SCHEMA", [
-            test_sql_has_organizations_table, test_sql_has_users_table,
-            test_sql_has_risks_table, test_sql_has_incidents_table,
-            test_sql_has_initiatives_table, test_sql_has_seed_org,
-            test_sql_has_seed_user, test_sql_has_seed_risks,
-            test_sql_has_seed_incidents, test_sql_has_seed_initiatives,
-            test_sql_has_indexes, test_sql_has_documents_table,
+            test_mysql_ddl_files_exist, test_sql_has_documents_table,
+            test_sql_has_agent_conversations_tables, test_sql_has_ai_tables,
+            test_sql_no_postgres_artifacts, test_migrations_create_user_module_permissions,
+            test_db_stub_yields_none, test_config_has_no_database_url,
+            test_env_files_have_no_postgres,
         ]),
         ("DOCKER CONFIGURATION", [
             test_docker_compose_has_db, test_docker_compose_has_api,
@@ -701,7 +705,7 @@ def main():
         ]),
         ("REQUIREMENTS INTEGRITY", [
             test_req_has_fastapi, test_req_has_sqlalchemy,
-            test_req_has_asyncpg, test_req_has_bcrypt,
+            test_req_has_pymysql, test_req_has_bcrypt,
             test_req_has_xgboost, test_req_has_numpy,
             test_req_no_passlib,
         ]),

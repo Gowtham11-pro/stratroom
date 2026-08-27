@@ -35,3 +35,9 @@ Thumbs.db
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+
+# Scratch and analysis
+_sample_analysis/
+.kilo/
+verify_deploy.py
+

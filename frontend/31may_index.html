@@ -531,11 +531,242 @@ body.theme-light #topnav {
   padding: 7px 10px !important;
   font-weight: 500 !important;
 }
-.status-pill {
-  font-size: 10px !important;
-  font-weight: 600 !important;
-  letter-spacing: .04em !important;
-  padding: 4px 10px !important;
+/* ═══════════════════════════════════════════════════════════════
+   GLOBAL PERIOD & DATE RANGE POPOVER PICKER (Exact Mockup Match)
+   ═══════════════════════════════════════════════════════════════ */
+.global-period-picker-wrap {
+  position: relative;
+  display: inline-block;
+}
+.global-period-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--border2, #334155);
+  background: var(--surface, #1e293b);
+  color: var(--text, #f8fafc);
+  font-family: 'DM Sans', 'Trebuchet MS', sans-serif;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.global-period-btn:hover {
+  border-color: #0091ff;
+  color: #38bdf8;
+  background: var(--surface2, #334155);
+}
+.global-period-popover {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 10000;
+  width: 660px;
+  background: #ffffff;
+  color: #1e293b;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18), 0 4px 16px rgba(0, 0, 0, 0.08);
+  padding: 14px;
+  font-family: 'DM Sans', 'Inter', system-ui, sans-serif;
+}
+body:not(.theme-light) .global-period-popover {
+  background: #18181b;
+  color: #f4f4f5;
+  border-color: #27272a;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+}
+.global-period-popover.show {
+  display: block;
+  animation: popoverFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes popoverFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Month Grid Items */
+.gperiod-month-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 6px;
+}
+.gperiod-month-item {
+  padding: 8px 4px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #475569;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+body:not(.theme-light) .gperiod-month-item {
+  color: #a1a1aa;
+}
+.gperiod-month-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+body:not(.theme-light) .gperiod-month-item:hover {
+  background: #27272a;
+  color: #fff;
+}
+.gperiod-month-item.active {
+  background: #1890ff !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 6px rgba(24, 144, 255, 0.35) !important;
+}
+
+/* Sub-Period Quarter Cards (Image 2) */
+.gperiod-sub-grid.quarter-mode {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 6px;
+}
+.gperiod-card-quarter {
+  padding: 12px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border,#e2e8f0);
+  background: var(--bg2,#ffffff);
+  color: var(--text,#1e293b);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.gperiod-card-quarter:hover {
+  border-color: #1890ff;
+}
+.gperiod-card-quarter.active {
+  background: #1890ff !important;
+  color: #ffffff !important;
+  border-color: #1890ff !important;
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.35) !important;
+}
+.gperiod-card-quarter .sub-title {
+  font-size: 15px;
+  font-weight: 800;
+  margin-bottom: 2px;
+}
+.gperiod-card-quarter .sub-months {
+  font-size: 9.5px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+/* Sub-Period Half Year Cards (Image 3) */
+.gperiod-sub-grid.half-mode {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 6px;
+}
+.gperiod-card-half {
+  padding: 14px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border,#e2e8f0);
+  background: var(--bg2,#ffffff);
+  color: var(--text,#1e293b);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.gperiod-card-half:hover {
+  border-color: #1890ff;
+}
+.gperiod-card-half.active {
+  background: #1890ff !important;
+  color: #ffffff !important;
+  border-color: #1890ff !important;
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.35) !important;
+}
+.gperiod-card-half .sub-title {
+  font-size: 15px;
+  font-weight: 800;
+  margin-bottom: 2px;
+}
+.gperiod-card-half .sub-months {
+  font-size: 9.5px;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+/* Sub-Period Year Cards (Image 4) */
+.gperiod-sub-grid.year-mode {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 6px;
+}
+.gperiod-card-year {
+  padding: 10px 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border,#e2e8f0);
+  background: var(--surface,#f8fafc);
+  color: var(--text2,#334155);
+  font-size: 11.5px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.gperiod-card-year:hover {
+  border-color: #1890ff;
+  color: #1890ff;
+}
+.gperiod-card-year.active {
+  background: #1890ff !important;
+  color: #ffffff !important;
+  border-color: #1890ff !important;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.35) !important;
+}
+
+/* Mode Tabs */
+.gperiod-tab {
+  flex: 1;
+  padding: 5px 6px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  text-align: center;
+}
+body:not(.theme-light) .gperiod-tab {
+  color: #a1a1aa;
+}
+.gperiod-tab.active {
+  background: #1890ff !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  box-shadow: 0 1px 4px rgba(24, 144, 255, 0.3) !important;
+}
+.gperiod-year-nav {
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #475569;
+  font-size: 11px;
+  cursor: pointer;
+}
+body:not(.theme-light) .gperiod-year-nav {
+  background: #27272a;
+  border-color: #3f3f46;
+  color: #e4e4e7;
 }
 
 /* ══════════════════════════════════
@@ -7467,6 +7698,7 @@ body.theme-light ::-webkit-scrollbar-thumb:hover {
         assignedRisks: ['R001', 'R002'],
         assignedProjects: ['DT001', 'MEA001']
     };
+    window.CurrentUser = CurrentUser;
 
     // Session validation + expiry handling (shared by all request paths)
     function isTokenValid() {
@@ -7486,6 +7718,16 @@ body.theme-light ::-webkit-scrollbar-thumb:hover {
     window.isTokenValid = isTokenValid;
 
     function handleSessionExpired() {
+        // Race guard: ignore stray 401s shortly after a successful login. The
+        // freshly-issued token is valid, so a 401 at this point can only come
+        // from a stale in-flight request fired before/during login (e.g. the
+        // standalone-stats refresh). Clearing the session here is what causes
+        // the "dashboard flashes for a split second, then kicks you back to
+        // login" auto-logout loop.
+        if (Date.now() - (window._lastLoginAt || 0) < 20000
+            && typeof window.isTokenValid === 'function' && window.isTokenValid()) {
+            return;
+        }
         ['sr_backend_token', 'stratroom_token', 'api-token'].forEach(function(k) { localStorage.removeItem(k); });
         ['user_name', 'user_role', 'user_dept', 'user_email', 'user_id', 'user_org_id',
          'current_emp_id', 'current_page_id', 'stratroom_user_profile',
@@ -8674,6 +8916,75 @@ document.addEventListener('DOMContentLoaded', function() {
   <div class="nav-right">
     <div class="status-pill"><div class="status-dot"></div>Live</div>
     <div style="width:1px;height:20px;background:var(--border);flex-shrink:0"></div>
+    
+    <!-- Top Header Global Period / Date Range Filter (Exact Reference Popover) -->
+    <div class="global-period-picker-wrap">
+      <button id="global-period-btn" class="global-period-btn" onclick="toggleGlobalPeriodPicker()" title="Global Period & Fiscal Year Filter">
+        <span style="font-size:12px">📅</span>
+        <span id="global-period-label" style="font-weight:700">Aug 2026 · Month</span>
+        <span style="font-size:9px;opacity:0.7">▾</span>
+      </button>
+
+      <div class="global-period-popover" id="global-period-popover">
+        <div style="display:grid;grid-template-columns:1fr 1fr 220px;gap:14px;align-items:start;">
+          <!-- START COLUMN -->
+          <div style="background:var(--surface,#f8fafc);border:1px solid var(--border,#e2e8f0);border-radius:12px;padding:12px;">
+            <div style="text-align:center;font-size:12px;font-weight:700;color:var(--text3,#64748b);background:var(--surface2,#f1f5f9);border-radius:6px;padding:4px 0;margin-bottom:10px;">Start</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:10px;">
+              <button type="button" class="gperiod-year-nav" onclick="changeStartYear(-1, event)" title="Previous Start Year">⬅</button>
+              <select id="gperiod-start-year" onchange="updateStartYearGrid(this.value)" style="flex:1;padding:4px 6px;border-radius:6px;border:1px solid var(--border2,#cbd5e1);background:var(--bg2,#fff);color:var(--text,#0f172a);font-size:11px;font-weight:700;text-align:center;">
+              </select>
+              <button type="button" class="gperiod-year-nav" onclick="changeStartYear(1, event)" title="Next Start Year">➡</button>
+            </div>
+            <div class="gperiod-month-grid" id="gperiod-start-months"></div>
+          </div>
+
+          <!-- END COLUMN -->
+          <div style="background:var(--surface,#f8fafc);border:1px solid var(--border,#e2e8f0);border-radius:12px;padding:12px;">
+            <div style="text-align:center;font-size:12px;font-weight:700;color:var(--text3,#64748b);background:var(--surface2,#f1f5f9);border-radius:6px;padding:4px 0;margin-bottom:10px;">End</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:10px;">
+              <button type="button" class="gperiod-year-nav" onclick="changeEndYear(-1, event)" title="Previous End Year">⬅</button>
+              <select id="gperiod-end-year" onchange="updateEndYearGrid(this.value)" style="flex:1;padding:4px 6px;border-radius:6px;border:1px solid var(--border2,#cbd5e1);background:var(--bg2,#fff);color:var(--text,#0f172a);font-size:11px;font-weight:700;text-align:center;">
+              </select>
+              <button type="button" class="gperiod-year-nav" onclick="changeEndYear(1, event)" title="Next End Year">➡</button>
+            </div>
+            <div class="gperiod-month-grid" id="gperiod-end-months"></div>
+          </div>
+
+          <!-- RIGHT PANEL -->
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <!-- Tabs -->
+            <div style="display:flex;background:var(--surface2,#f1f5f9);padding:3px;border-radius:8px;gap:2px;">
+              <button class="gperiod-tab active" data-mode="month" onclick="selectPeriodMode('month', this)">Month</button>
+              <button class="gperiod-tab" data-mode="quarter" onclick="selectPeriodMode('quarter', this)">Quarter</button>
+              <button class="gperiod-tab" data-mode="half" onclick="selectPeriodMode('half', this)">Half Year</button>
+              <button class="gperiod-tab" data-mode="year" onclick="selectPeriodMode('year', this)">Year</button>
+            </div>
+
+            <!-- Fiscal Year Dropdown -->
+            <select id="gperiod-fy-type" onchange="updateFiscalYearType(this.value)" style="width:100%;padding:7px 10px;border-radius:8px;border:none;background:#1890ff;color:#fff;font-size:11.5px;font-weight:700;cursor:pointer;outline:none;">
+              <option value="apr-mar" selected>FY Apr - Mar</option>
+              <option value="jan-dec">FY Jan - Dec</option>
+              <option value="jul-jun">FY Jul - Jun</option>
+              <option value="oct-sep">FY Oct - Sep</option>
+            </select>
+
+            <!-- Date Inputs -->
+            <div style="display:flex;gap:6px;">
+              <input type="text" id="gperiod-start-date" value="08/01/2026" style="width:50%;padding:6px 8px;border-radius:6px;border:1px solid var(--border2,#cbd5e1);background:var(--bg2,#fff);color:var(--text,#0f172a);font-size:11px;font-weight:600;text-align:center;">
+              <input type="text" id="gperiod-end-date" value="08/31/2026" style="width:50%;padding:6px 8px;border-radius:6px;border:1px solid var(--border2,#cbd5e1);background:var(--bg2,#fff);color:var(--text,#0f172a);font-size:11px;font-weight:600;text-align:center;">
+            </div>
+
+            <!-- Buttons -->
+            <div style="display:flex;gap:8px;margin-top:2px;">
+              <button onclick="applyGlobalPeriodFilter()" style="flex:1;padding:8px;border-radius:8px;border:none;background:#1890ff;color:#fff;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 2px 6px rgba(24,144,255,0.4);">Apply</button>
+              <button onclick="toggleGlobalPeriodPicker(false)" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border2,#cbd5e1);background:var(--surface,#f1f5f9);color:var(--text2,#64748b);font-size:12px;font-weight:600;cursor:pointer;">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="width:1px;height:20px;background:var(--border);flex-shrink:0"></div>
     <!-- Language Selector - Compact Flag Dropdown -->
     <div class="lang-dropdown" id="lang-dropdown">
       <button class="lang-dropdown-btn" id="lang-dropdown-btn" onclick="toggleLangDropdown()">
@@ -8954,22 +9265,32 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
       </div>
 
-      <div class="card readiness-card">
-        <div class="card-title">🎯 Board Readiness Score — Predicted</div>
-        <div class="readiness-stats">
-          <div style="text-align:center">
-            <div class="readiness-number">78<span style="font-size:24px">%</span></div>
-            <div class="readiness-sublabel" style="font-size:10px;color:var(--text3)">Current</div>
+      <div class="card readiness-card" style="margin-top:16px;">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+          <span>🎯 Board Readiness Score — Predicted</span>
+          <span style="font-size:11px;font-weight:600;color:var(--text2,#64748b);">ML Risk Projection</span>
+        </div>
+        <div class="readiness-stats" style="margin-top:10px;">
+          <div style="text-align:center;min-width:70px;">
+            <div class="readiness-number" id="board-readiness-current-val" style="font-size:36px;font-weight:800;color:#10b981;line-height:1;">78<span style="font-size:20px">%</span></div>
+            <div class="readiness-sublabel" style="font-size:10px;font-weight:600;color:var(--text3,#64748b);margin-top:4px;">Current Score</div>
           </div>
-          <div style="flex:1">
-            <div class="readiness-bar"><div class="readiness-bar-fill"></div></div>
-            <div style="display:flex;justify-content:space-between;font-size:10px"><span>🔴 Critical</span><span>🟡 At risk</span><span>🟢 Ready</span></div>
+          <div style="flex:1;padding:0 12px;">
+            <div class="readiness-bar-container" style="position:relative;height:14px;background:linear-gradient(90deg, #ef4444 0%, #f59e0b 50%, #10b981 100%);border-radius:99px;margin-bottom:8px;overflow:hidden;box-shadow:inset 0 1px 3px rgba(0,0,0,0.3);">
+              <div id="readiness-bar-fill-mask" style="position:absolute;top:0;right:0;bottom:0;width:22%;background:rgba(15,23,42,0.65);backdrop-filter:blur(1px);transition:width 0.4s cubic-bezier(0.4, 0, 0.2, 1);"></div>
+              <div id="readiness-bar-marker" style="position:absolute;top:0;left:78%;bottom:0;width:3px;background:#ffffff;box-shadow:0 0 8px rgba(255,255,255,1);transform:translateX(-50%);border-radius:2px;transition:left 0.4s cubic-bezier(0.4, 0, 0.2, 1);"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;">
+              <span style="color:#ef4444;display:inline-flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;border-radius:50%;background:#ef4444;"></span> Critical (0-49%)</span>
+              <span style="color:#f59e0b;display:inline-flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;border-radius:50%;background:#f59e0b;"></span> At Risk (50-74%)</span>
+              <span style="color:#10b981;display:inline-flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;border-radius:50%;background:#10b981;"></span> Ready (75-100%)</span>
+            </div>
           </div>
-          <div style="text-align:center">
-            <div class="readiness-predicted" style="font-size:32px;font-weight:700;color:var(--amber)">-12<span style="font-size:14px">%</span></div>
-            <div class="readiness-sublabel" style="font-size:10px;color:var(--text3)">Predicted</div>
+          <div style="text-align:center;min-width:70px;">
+            <div class="readiness-predicted" id="board-readiness-predicted-val" style="font-size:28px;font-weight:800;color:#f59e0b;line-height:1;">-12<span style="font-size:14px">%</span></div>
+            <div class="readiness-sublabel" style="font-size:10px;font-weight:600;color:var(--text3,#64748b);margin-top:4px;">Predicted Delta</div>
           </div>
-          <button class="btn btn-primary" onclick="toggleReadinessDetails()">View Gaps →</button>
+          <button class="btn btn-primary" onclick="toggleReadinessDetails()" style="font-size:11px;padding:6px 12px;font-weight:700;">View Gaps →</button>
         </div>
         <div id="readiness-details" style="display:none;margin-top:12px;padding:12px;background:var(--surface);border-radius:8px;font-size:11px">
           <strong>Critical Gaps (Fix by Oct 15):</strong><br>
@@ -9777,151 +10098,793 @@ window.generateRiskTasks = generateRiskTasks;
 .cell-high{background:rgba(245,158,11,0.18);border-color:var(--amber-border);color:var(--amber);}
 .cell-medium{background:rgba(56,189,248,0.12);border-color:var(--blue-border);color:var(--blue2);}
 .cell-low{background:rgba(34,197,94,0.1);border-color:var(--green-border);color:var(--green);}
+
+/* ══════════════════════════════════════════════════════════════════════
+   PRO-LEVEL ARCHITECT DIRECTIVE: LIGHT MODE PURE WHITE GLASS & LOGO AMBIENT
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Default / Dark Mode Ambient Background (Logo-Replicated Left Purple / Right Blue) */
+#view-kpi-detail,
+div#view-kpi-detail.panel {
+  position: relative !important;
+  background: radial-gradient(circle at 15% 20%, rgba(168, 85, 247, 0.28) 0%, transparent 50%),
+              radial-gradient(circle at 85% 80%, rgba(59, 130, 246, 0.28) 0%, transparent 50%),
+              #070a13 !important;
+  color: #ffffff !important;
+  border-radius: 24px !important;
+  padding: 28px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.65) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  overflow: hidden !important;
+}
+
+/* Subtle Ambient StratRoom Logo Watermark Aura */
+#view-kpi-detail::before {
+  content: 'STRATROOM';
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-4deg);
+  font-size: 110px;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  color: rgba(255, 255, 255, 0.022);
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+  filter: blur(2px);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* ── LIGHT MODE PURE WHITE GLASS OVERRIDES ── */
+body.light-mode #view-kpi-detail,
+body.theme-light #view-kpi-detail,
+[data-theme="light"] #view-kpi-detail,
+#view-kpi-detail.light-theme,
+#view-kpi-detail.light-mode {
+  background: radial-gradient(circle at 15% 20%, rgba(168, 85, 247, 0.12) 0%, transparent 45%),
+              radial-gradient(circle at 85% 80%, rgba(59, 130, 246, 0.12) 0%, transparent 45%),
+              #f1f5f9 !important;
+  color: #0f172a !important;
+  border: 1px solid rgba(203, 213, 225, 0.9) !important;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.08) !important;
+}
+
+body.light-mode #view-kpi-detail *,
+body.theme-light #view-kpi-detail *,
+[data-theme="light"] #view-kpi-detail *,
+#view-kpi-detail.light-theme *,
+#view-kpi-detail.light-mode * {
+  color: #0f172a !important;
+}
+
+body.light-mode #view-kpi-detail::before,
+body.theme-light #view-kpi-detail::before,
+[data-theme="light"] #view-kpi-detail::before,
+#view-kpi-detail.light-theme::before,
+#view-kpi-detail.light-mode::before {
+  color: rgba(15, 23, 42, 0.035) !important;
+}
+
+/* Light-Blue Tinted Glass Cards for Light Mode */
+body.light-mode #view-kpi-detail .kpi-drill-card,
+body.theme-light #view-kpi-detail .kpi-drill-card,
+[data-theme="light"] #view-kpi-detail .kpi-drill-card,
+#view-kpi-detail.light-theme .kpi-drill-card,
+#view-kpi-detail.light-mode .kpi-drill-card {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(186, 230, 253, 0.9) !important;
+  box-shadow: 0 10px 30px rgba(14, 165, 233, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+  color: #0f172a !important;
+}
+
+body.light-mode #view-kpi-detail .kpi-drill-card > div:first-child,
+body.theme-light #view-kpi-detail .kpi-drill-card > div:first-child,
+[data-theme="light"] #view-kpi-detail .kpi-drill-card > div:first-child,
+#view-kpi-detail.light-theme .kpi-drill-card > div:first-child,
+#view-kpi-detail.light-mode .kpi-drill-card > div:first-child {
+  background: rgba(240, 249, 255, 0.9) !important;
+  border-bottom: 1px solid rgba(186, 230, 253, 0.9) !important;
+  color: #0f172a !important;
+}
+
+body.light-mode #view-kpi-detail .kpi-drill-card h1,
+body.light-mode #view-kpi-detail .kpi-drill-card h2,
+body.light-mode #view-kpi-detail .kpi-drill-card h3,
+body.light-mode #view-kpi-detail .kpi-drill-card span,
+body.light-mode #view-kpi-detail th,
+body.light-mode #view-kpi-detail td,
+body.theme-light #view-kpi-detail .kpi-drill-card h1,
+body.theme-light #view-kpi-detail .kpi-drill-card h2,
+body.theme-light #view-kpi-detail .kpi-drill-card h3,
+body.theme-light #view-kpi-detail .kpi-drill-card span,
+body.theme-light #view-kpi-detail th,
+body.theme-light #view-kpi-detail td {
+  color: #0f172a !important;
+}
+
+body.light-mode #view-kpi-detail table thead th,
+body.theme-light #view-kpi-detail table thead th,
+[data-theme="light"] #view-kpi-detail table thead th,
+#view-kpi-detail.light-theme table thead th,
+#view-kpi-detail.light-mode table thead th {
+  background: #1890ff !important;
+  color: #ffffff !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.25) !important;
+  font-weight: 700 !important;
+}
+
+body.light-mode #view-kpi-detail table td,
+body.theme-light #view-kpi-detail table td,
+[data-theme="light"] #view-kpi-detail table td,
+#view-kpi-detail.light-theme table td,
+#view-kpi-detail.light-mode table td {
+  color: #0f172a !important;
+  border-color: rgba(226, 232, 240, 0.9) !important;
+}
+
+body.light-mode #view-kpi-detail button,
+body.theme-light #view-kpi-detail button,
+[data-theme="light"] #view-kpi-detail button,
+#view-kpi-detail.light-theme button,
+#view-kpi-detail.light-mode button {
+  background: rgba(241, 245, 249, 0.9) !important;
+  border: 1px solid rgba(203, 213, 225, 0.9) !important;
+  color: #0f172a !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+}
+
+body.light-mode #view-kpi-detail button:hover,
+body.theme-light #view-kpi-detail button:hover,
+[data-theme="light"] #view-kpi-detail button:hover,
+#view-kpi-detail.light-theme button:hover,
+#view-kpi-detail.light-mode button:hover {
+  background: #ffffff !important;
+  border-color: #0091ff !important;
+  color: #0091ff !important;
+}
+
+body.light-mode #view-kpi-detail #kpi-user-badge,
+body.theme-light #view-kpi-detail #kpi-user-badge,
+[data-theme="light"] #view-kpi-detail #kpi-user-badge,
+#view-kpi-detail.light-theme #kpi-user-badge,
+#view-kpi-detail.light-mode #kpi-user-badge {
+  background: rgba(0, 145, 255, 0.12) !important;
+  border: 1px solid rgba(0, 145, 255, 0.3) !important;
+  color: #0091ff !important;
+}
+
+body.light-mode #view-kpi-detail #kpi-section-toggle-menu,
+body.theme-light #view-kpi-detail #kpi-section-toggle-menu,
+[data-theme="light"] #view-kpi-detail #kpi-section-toggle-menu,
+#view-kpi-detail.light-theme #kpi-section-toggle-menu,
+#view-kpi-detail.light-mode #kpi-section-toggle-menu {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border: 1px solid rgba(203, 213, 225, 0.9) !important;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.15) !important;
+  color: #0f172a !important;
+}
+
+body.light-mode #view-kpi-detail [onclick*="exportKPIDataCSV"],
+body.theme-light #view-kpi-detail [onclick*="exportKPIDataCSV"],
+#view-kpi-detail.light-mode [onclick*="exportKPIDataCSV"] {
+  color: #0284c7 !important;
+}
+
+/* Floating Heavy Frosted Glass Cards with Subtle Refined Glow */
+#view-kpi-detail .kpi-drill-card {
+  position: relative !important;
+  z-index: 1 !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  border-radius: 20px !important;
+  overflow: hidden !important;
+  transition: transform 0.25s ease, box-shadow 0.25s ease !important;
+}
+
+#view-kpi-detail .kpi-drill-card:hover {
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+/* Header Glass Banner Bar on Top */
+#view-kpi-detail > div:first-child.kpi-drill-card {
+  background: linear-gradient(135deg, rgba(0, 145, 255, 0.25), rgba(147, 51, 234, 0.25)) !important;
+  backdrop-filter: blur(30px) !important;
+  -webkit-backdrop-filter: blur(30px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  border-radius: 24px !important;
+  box-shadow: 0 12px 40px rgba(0, 145, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+}
+
+/* Smooth Rounded Button Shapes & Glass Fills */
+#view-kpi-detail button,
+#view-kpi-detail .kpi-drill-card button {
+  border-radius: 20px !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  padding: 6px 14px !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  cursor: pointer !important;
+}
+
+#view-kpi-detail button:hover,
+#view-kpi-detail .kpi-drill-card button:hover {
+  background: rgba(255, 255, 255, 0.22) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35), 0 0 14px rgba(255, 255, 255, 0.2) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* User Badge Pill */
+#view-kpi-detail #kpi-user-badge {
+  border-radius: 20px !important;
+  background: rgba(255, 255, 255, 0.18) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  padding: 4px 12px !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+}
+
+/* Option Menu Toggle Icon Button */
+#view-kpi-detail #kpi-main-options-btn {
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  justify-content: center !important;
+  border-radius: 50% !important;
+}
+
+/* Graph Toggle Buttons */
+#view-kpi-detail #sec-graph button {
+  border-radius: 14px !important;
+  padding: 4px 12px !important;
+  font-size: 10px !important;
+}
+
+/* Card Header Bars */
+#view-kpi-detail .kpi-drill-card > div:first-child {
+  background: rgba(255, 255, 255, 0.07) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+/* Clean up inherited surfaces inside #view-kpi-detail */
+#view-kpi-detail div:not(.kpi-drill-card),
+#view-kpi-detail section,
+#view-kpi-detail article {
+  background-color: transparent;
+}
+
+#view-kpi-detail * {
+  color: #ffffff;
+}
+
+/* Chart Container & Legend Harmonization */
+#view-kpi-detail #sec-graph > div:last-child {
+  background: transparent !important;
+}
+
+#view-kpi-detail #sec-graph #kpi-chart-legend {
+  color: #cbd5e1 !important;
+}
+
+/* Data Table Scroll Container Clipping & Header Solid Frosted Glass */
+#view-kpi-detail #sec-data-table > div:last-child {
+  max-height: 300px !important;
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+  clip-path: inset(0 round 0 0 16px 16px) !important;
+  scrollbar-width: thin !important;
+}
+
+#view-kpi-detail table {
+  background: transparent !important;
+  color: #ffffff !important;
+  width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+#view-kpi-detail table thead th {
+  background: rgba(15, 23, 42, 0.95) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+  color: #ffffff !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18) !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+#view-kpi-detail table tbody tr {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+  transition: background 0.2s ease !important;
+}
+
+#view-kpi-detail table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.07) !important;
+}
+
+#view-kpi-detail table td {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
+/* Glass List Items (Initiatives, Risks, Files) */
+#view-kpi-detail #sec-initiatives > div:last-child,
+#view-kpi-detail #sec-risks > div:last-child,
+#view-kpi-detail #sec-files > div:last-child {
+  background: transparent !important;
+  color: #ffffff !important;
+}
+
+#view-kpi-detail #sec-initiatives div[style*="border"],
+#view-kpi-detail #sec-files div[style*="border"] {
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+#view-kpi-detail #sec-risks div[style*="border"] {
+  border-radius: 12px !important;
+}
+
+#view-kpi-detail #sec-comments #kpi-detail-comments-list {
+  background: transparent !important;
+  color: #cbd5e1 !important;
+}
+
+#view-kpi-detail #sec-comments > div:last-child {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+#view-kpi-detail #sec-comments input {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  color: #ffffff !important;
+  border-radius: 20px !important;
+  padding: 8px 16px !important;
+}
+
+#view-kpi-detail #sec-comments input::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Section Visibility Dropdown Menu */
+#view-kpi-detail #kpi-section-toggle-menu {
+  background: rgba(15, 23, 42, 0.96) !important;
+  backdrop-filter: blur(30px) !important;
+  -webkit-backdrop-filter: blur(30px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.65) !important;
+  color: #ffffff !important;
+  border-radius: 18px !important;
+}
 </style>
 
 <script>
-let riskData = [];
-const el=id=>document.getElementById(id);
-function sc(h){return h>=20?'sev-critical':h>=15?'sev-high':h>=10?'sev-medium':'sev-low';}
-function sl(h){return h>=20?'Critical':h>=15?'High':h>=10?'Medium':'Low';}
+(function() {
+  window.toggleKPISectionMenu = function(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('kpi-section-toggle-menu');
+    if (menu) menu.style.display = (menu.style.display === 'none' || !menu.style.display) ? 'block' : 'none';
+  };
 
-function updateKPIs(){
-  const n=riskData.length || 1;
-  const avgInh=(riskData.reduce((s,r)=>s+r.inhHeat,0)/n).toFixed(1);
-  const avgRes=(riskData.reduce((s,r)=>s+r.resHeat,0)/n).toFixed(1);
-  if(el('kpi-critical'))    el('kpi-critical').innerText=riskData.filter(r=>r.resHeat>=20).length;
-  if(el('kpi-high'))        el('kpi-high').innerText=riskData.filter(r=>r.resHeat>=15&&r.resHeat<20).length;
-  if(el('kpi-avg-inherent'))el('kpi-avg-inherent').innerText=riskData.length?avgInh:'—';
-  if(el('kpi-avg-residual'))el('kpi-avg-residual').innerText=riskData.length?avgRes:'—';
-  if(el('kpi-resilience'))  el('kpi-resilience').innerText=riskData.length?Math.min(98,Math.max(40,Math.round(100-(avgRes/25)*40)))+'%':'—';
-}
-
-function renderRiskTable(){
-  const tbody=el('risk-table-body'); if(!tbody) return;
-  if(!riskData.length){ tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text3);">No risks found.</td></tr>'; return; }
-  tbody.innerHTML=riskData.map(r=>`<tr style="border-bottom:1px solid var(--border);">
-    <td style="padding:10px 12px;color:var(--text2);"><strong>${r.name}</strong><div style="font-size:10px;color:var(--text3);">${r.desc}</div></td>
-    <td style="padding:10px 12px;color:var(--text2);">${r.owner}</td>
-    <td style="padding:10px 12px;color:var(--text2);">${r.inhL}/${r.inhI}</td>
-    <td style="padding:10px 12px;color:var(--text2);">${r.resL}/${r.resI}</td>
-    <td style="padding:10px 12px;"><span class="sev-badge ${sc(r.inhHeat)}">${r.inhHeat}</span></td>
-    <td style="padding:10px 12px;"><span class="sev-badge ${sc(r.resHeat)}">${r.resHeat}</span></td>
-    <td style="padding:10px 12px;"><span class="sev-badge ${sc(r.resHeat)}">${sl(r.resHeat)}</span> <span style="cursor:help;" title="${r.mit}">🛡️</span></td>
-  </tr>`).join('');
-}
-
-function buildGrid(mode){
-  const grid=Array(5).fill().map(()=>Array(5).fill().map(()=>[]));
-  riskData.forEach(r=>{
-    const l=mode==='inherent'?r.inhL:r.resL, i=mode==='inherent'?r.inhI:r.resI, h=mode==='inherent'?r.inhHeat:r.resHeat;
-    if(l>=1&&l<=5&&i>=1&&i<=5) grid[l-1][i-1].push({name:r.name,heat:h});
-  });
-  return grid;
-}
-
-function renderHeatmap(mode){
-  const container=el('heatmap-container'); if(!container) return;
-  if(!riskData.length){ container.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3);">No risk data to display.</div>'; return; }
-  const grid=buildGrid(mode);
-  const lhLabels=['5 — Very High','4 — High','3 — Medium','2 — Low','1 — Very Low'];
-  const impLabels=[['1','Very Low'],['2','Low'],['3','Medium'],['4','High'],['5','Very High']];
-  const bgOf=h=>h>=20?'rgba(239,68,68,0.22)':h>=15?'rgba(245,158,11,0.18)':h>=10?'rgba(56,189,248,0.12)':'rgba(34,197,94,0.1)';
-  const bdOf=h=>h>=20?'var(--red-border)':h>=15?'var(--amber-border)':h>=10?'var(--blue-border)':'var(--green-border)';
-  const clOf=h=>h>=20?'var(--red)':h>=15?'var(--amber)':h>=10?'var(--blue2)':'var(--green)';
-  let html=`<div style="display:flex;"><div style="width:18px;display:flex;align-items:center;justify-content:center;"><div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:9px;font-weight:700;color:var(--text3);">LIKELIHOOD →</div></div><div style="flex:1;">`;
-  html+=`<div style="display:grid;grid-template-columns:72px repeat(5,1fr);gap:4px;margin-bottom:4px;"><div></div>${impLabels.map(([n,l])=>`<div style="text-align:center;"><div style="font-size:11px;font-weight:800;">${n}</div><div style="font-size:8px;color:var(--text3);">${l}</div></div>`).join('')}</div>`;
-  html+=`<div style="display:grid;grid-template-columns:72px 1fr;margin-bottom:2px;"><div></div><div style="text-align:center;font-size:9px;font-weight:700;color:var(--text3);">← IMPACT →</div></div>`;
-  for(let row=0;row<5;row++){
-    const lval=5-row;
-    html+=`<div style="display:grid;grid-template-columns:72px repeat(5,1fr);gap:4px;margin-bottom:4px;">`;
-    const lp=lhLabels[row].split(' — ');
-    html+=`<div style="display:flex;flex-direction:column;align-items:flex-end;justify-content:center;padding-right:6px;"><div style="font-size:11px;font-weight:800;">${lp[0]}</div><div style="font-size:8px;color:var(--text3);">${lp[1]||''}</div></div>`;
-    for(let col=0;col<5;col++){
-      const hs=lval*(col+1), risks=grid[lval-1][col], cnt=risks.length;
-      html+=`<div style="background:${bgOf(hs)};border:1px solid ${bdOf(hs)};color:${clOf(hs)};border-radius:8px;text-align:center;padding:12px 4px;font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;" title="${cnt>0?risks.map(r=>r.name+'('+r.heat+')').join(', '):'No risks'}" onmouseenter="this.style.transform='scale(1.04)'" onmouseleave="this.style.transform='scale(1)'">
-        ${cnt>0?`<div style="font-size:16px;font-weight:800;">${cnt}</div><div style="font-size:8px;">${risks.slice(0,2).map(r=>r.name.split(' ')[0]).join(',')}${cnt>2?'+${cnt-2}':''}</div>`:'<div style="opacity:.4;">—</div>'}
-      </div>`;
+  window.toggleKPIPanelSection = function(sectionId, isChecked) {
+    const target = document.getElementById(sectionId);
+    if (target) {
+      target.style.display = isChecked ? '' : 'none';
     }
-    html+=`</div>`;
-  }
-  html+=`</div></div>`;
-  container.innerHTML=html;
-  const badge=el('heatmap-badge');
-  if(badge) badge.innerHTML=mode==='inherent'?'🔥 Inherent: raw likelihood × impact':'✅ Residual: after existing controls';
-}
+  };
 
-function renderAI(){
-  const s=el('risk-ai-signals'), r=el('risk-ai-recs');
-  if(s) s.innerHTML=riskData.length?'<div style="color:var(--text3);font-size:11px;">AI signals available after deeper analysis. Use the AI chat for insights.</div>':'<div style="color:var(--text3);font-size:11px;">No risk data for AI analysis.</div>';
-  if(r) r.innerHTML='<div style="color:var(--text3);font-size:11px;">Use the AI Agent panel to generate recommendations.</div>';
-}
-
-function initToggles(){
-  let currentMode='inherent';
-  document.querySelectorAll('.view-toggle-risk').forEach(btn=>{
-    btn.addEventListener('click',function(){
-      document.querySelectorAll('.view-toggle-risk').forEach(b=>{b.style.background='transparent';b.style.color='var(--text3)';b.classList.remove('active');});
-      this.style.background='var(--blue2)'; this.style.color='#fff'; this.classList.add('active');
-      const view=this.getAttribute('data-view');
-      if(view==='table'){
-        el('risk-tableView').style.display='block';
-        el('risk-heatmapView').style.display='none';
-      } else {
-        el('risk-tableView').style.display='none';
-        el('risk-heatmapView').style.display='block';
-        currentMode=view; renderHeatmap(currentMode);
-      }
-    });
-  });
-}
-
-window._riskHydrated = false;
-async function initRiskPage(){
-  if (window._riskHydrated) return;
-  window._riskHydrated = true;
-  if (typeof window.isTokenValid !== 'function' || !window.isTokenValid()) { updateKPIs(); renderRiskTable(); renderHeatmap('inherent'); renderAI(); initToggles(); return; }
-  try {
-    const pageParam = window.CURRENT_PAGE_ID ? '?page=' + encodeURIComponent(window.CURRENT_PAGE_ID) : '';
-    const resp = await (window.authFetch || fetch)((window.BACKEND || '') + '/risks' + pageParam, { cache: 'no-store' });
-    if (resp.ok) {
-      const data = await resp.json();
-      const rows = data.risks || data;
-      if (Array.isArray(rows) && rows.length > 0) {
-        riskData = rows.map(r => ({
-          id: r.id || r.ID,
-          name: r.riskName || r.name || r.risk_name || 'Unknown',
-          owner: r.owner || '—',
-          inhL: parseInt(r.inherentLikelihood || r.inhL || r.inherent_likelihood || 1),
-          inhI: parseInt(r.inherentImpact || r.inhI || r.inherent_impact || 1),
-          resL: parseInt(r.residualLikelihood || r.resL || r.residual_likelihood || 1),
-          resI: parseInt(r.residualImpact || r.resI || r.residual_impact || 1),
-          desc: r.description || r.desc || '',
-          mit: r.mitigation || r.mit || ''
-        }));
-        riskData.forEach(r => { r.inhHeat = r.inhL * r.inhI; r.resHeat = r.resL * r.resI; });
-      }
+  window.closeKPIDetailView = function() {
+    const detail = document.getElementById('view-kpi-detail');
+    if (detail) detail.style.display = 'none';
+    const sc = document.getElementById('view-scorecard');
+    if (sc) sc.style.display = 'block';
+    if (typeof window.navigate === 'function') {
+      window.navigate('view-scorecard');
     }
-  } catch(e) { console.warn('Risk fetch failed, showing empty state', e); }
-  updateKPIs();
-  renderRiskTable();
-  renderHeatmap('inherent');
-  renderAI();
-  initToggles();
-}
+  };
 
-if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',initRiskPage);}
-else{setTimeout(initRiskPage,100);}
+  window.openKPIEditModal = function() {
+    const m = document.getElementById('kpi-edit-modal');
+    if (m) m.style.display = 'flex';
+  };
+  window.closeKPIEditModal = function() {
+    const m = document.getElementById('kpi-edit-modal');
+    if (m) m.style.display = 'none';
+  };
+
+  window.openKPIAuditModal = function() {
+    const m = document.getElementById('kpi-audit-modal');
+    if (m) m.style.display = 'flex';
+  };
+  window.closeKPIAuditModal = function() {
+    const m = document.getElementById('kpi-audit-modal');
+    if (m) m.style.display = 'none';
+  };
+
+  document.addEventListener('click', function(e) {
+    const menu = document.getElementById('kpi-section-toggle-menu');
+    const btn = document.getElementById('kpi-main-options-btn');
+    if (menu && menu.style.display === 'block' && !menu.contains(e.target) && btn && !btn.contains(e.target)) {
+      menu.style.display = 'none';
+    }
+  });
+})();
 </script>
+
+<div class="panel" id="view-kpi-detail" style="display:none;padding:24px;">
+  <!-- Blue Banner Bar -->
+  <div class="kpi-drill-card" style="padding:14px 24px;color:#fff;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <button onclick="closeKPIDetailView()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:6px 16px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.2s ease;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        <span>Back to Scorecard</span>
+      </button>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span id="kpi-user-badge" style="display:inline-block;padding:4px 12px;border-radius:20px;background:rgba(255,255,255,0.25);font-size:11px;font-weight:800;font-family:'DM Mono',monospace;letter-spacing:0.05em;color:#fff;">DO</span>
+        <span id="kpi-detail-title" style="font-size:18px;font-weight:800;letter-spacing:-0.01em;color:#ffffff;">Revenue growth rate</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;position:relative;">
+      <!-- Dynamic Date-Context Filter Select -->
+      <div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);border-radius:20px;padding:2px 10px;">
+        <span style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.8);text-transform:uppercase;">Period:</span>
+        <select id="kpi-period-filter-select" onchange="filterKPIDataByPeriod(this.value)" style="background:transparent;border:none;color:#fff;font-size:11px;font-weight:700;cursor:pointer;outline:none;">
+          <option value="ALL" style="background:#0f172a;color:#fff;">All Periods</option>
+          <option value="2025" style="background:#0f172a;color:#fff;">Year 2025</option>
+          <option value="2026" style="background:#0f172a;color:#fff;">Year 2026</option>
+          <option value="2027" style="background:#0f172a;color:#fff;">Year 2027</option>
+        </select>
+      </div>
+
+      <button onclick="openKPIEditModal()" title="Edit KPI" style="padding:6px 14px;border-radius:20px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.15);color:#fff;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:background 0.2s;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Edit
+      </button>
+      <button onclick="openKPIAuditModal()" title="View Audit Log" style="padding:6px 14px;border-radius:20px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.15);color:#fff;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:background 0.2s;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> Audit
+      </button>
+      <button id="kpi-main-options-btn" onclick="toggleKPISectionMenu(event)" title="Section Visibility Menu" style="padding:0;width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.15);color:#fff;font-size:14px;font-weight:700;cursor:pointer;transition:background 0.2s;display:inline-flex;align-items:center;justify-content:center;">⋮</button>
+      
+      <!-- Section Visibility Dropdown Menu (ONLY triggered by kpi-main-options-btn) -->
+      <div id="kpi-section-toggle-menu" style="display:none;position:absolute;top:38px;right:0;z-index:100;width:190px;padding:12px;font-size:12px;color:#ffffff;">
+        <div style="font-weight:700;margin-bottom:8px;color:#cbd5e1;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;">SECTION VISIBILITY</div>
+        <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;"><input type="checkbox" checked onchange="toggleKPIPanelSection('sec-data-table', this.checked)" style="accent-color:#0091ff;" /> Data Table</label>
+        <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;"><input type="checkbox" checked onchange="toggleKPIPanelSection('sec-graph', this.checked)" style="accent-color:#0091ff;" /> Actual v/s Target</label>
+        <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;"><input type="checkbox" checked onchange="toggleKPIPanelSection('sec-initiatives', this.checked)" style="accent-color:#0091ff;" /> My Initiatives</label>
+        <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;"><input type="checkbox" checked onchange="toggleKPIPanelSection('sec-risks', this.checked)" style="accent-color:#0091ff;" /> Risks</label>
+        <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;"><input type="checkbox" checked onchange="toggleKPIPanelSection('sec-drill', this.checked)" style="accent-color:#0091ff;" /> Data Drill</label>
+        <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;"><input type="checkbox" checked onchange="toggleKPIPanelSection('sec-comments', this.checked)" style="accent-color:#0091ff;" /> Comments</label>
+        <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;"><input type="checkbox" checked onchange="toggleKPIPanelSection('sec-files', this.checked)" style="accent-color:#0091ff;" /> Files</label>
+        <div style="border-top:1px solid rgba(255,255,255,0.12);margin:8px 0;"></div>
+        <div onclick="exportKPIDataCSV()" style="padding:4px 0;cursor:pointer;font-weight:700;color:#38bdf8;display:flex;align-items:center;gap:6px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Export CSV</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 1 & 2: Top 2-Column Grid (Compact Data Table Top-Left, Expanded Graph Card Top-Right) -->
+  <div style="display:grid;grid-template-columns:42% 58%;gap:20px;margin-bottom:24px;align-items:stretch;">
+    
+    <!-- 1. Compact Data Table Card -->
+    <div id="sec-data-table" class="kpi-drill-card" style="display:flex;flex-direction:column;justify-content:flex-start;">
+      <div style="color:#fff;padding:12px 18px;font-weight:800;font-size:12px;display:flex;justify-content:space-between;align-items:center;">
+        <span>Data Table</span>
+        <span onclick="exportKPIDataCSV()" title="Export CSV" style="cursor:pointer;font-size:13px;display:flex;align-items:center;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </span>
+      </div>
+      <div style="padding:0;overflow-x:auto;max-height:280px;overflow-y:auto;scrollbar-width:thin;">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;">
+          <thead style="position:sticky;top:0;z-index:2;">
+            <tr style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;font-weight:800;">
+              <th style="padding:10px 12px;text-align:left;">PERIOD</th>
+              <th style="padding:10px 12px;text-align:right;">ACTUAL</th>
+              <th style="padding:10px 12px;text-align:right;">TARGET</th>
+              <th style="padding:10px 12px;text-align:right;">GAP</th>
+              <th style="padding:10px 12px;text-align:right;">YTD</th>
+              <th style="padding:10px 12px;text-align:right;">CONTRIBUTION</th>
+            </tr>
+          </thead>
+          <tbody id="kpi-detail-data-table-body">
+            <!-- Period matrix rows rendered dynamically -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 2. Expanded Actual v/s Target Graph Card with Enterprise Toolbar -->
+    <div id="sec-graph" class="kpi-drill-card" style="display:flex;flex-direction:column;justify-content:space-between;height:100%;">
+      <div style="padding:12px 18px;font-weight:800;font-size:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <span style="font-size:13px;letter-spacing:-0.01em;">Actual v/s Target</span>
+        
+        <!-- Enterprise Interactive Chart Toolbar -->
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative;">
+          <!-- Chart Type Toggles -->
+          <div style="display:inline-flex;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:16px;padding:2px;">
+            <button onclick="toggleKPIChartType('bar')" title="Column (Bar) View" style="padding:4px 10px;border-radius:12px !important;border:none !important;box-shadow:none !important;font-size:10px;">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> Bar
+            </button>
+            <button onclick="toggleKPIChartType('line')" title="Line View" style="padding:4px 10px;border-radius:12px !important;border:none !important;box-shadow:none !important;font-size:10px;">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Line
+            </button>
+            <button onclick="toggleKPIChartType('area')" title="Area View" style="padding:4px 10px;border-radius:12px !important;border:none !important;box-shadow:none !important;font-size:10px;">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 3v18h18"/><path d="M18 17V9l-5 5-4-4-4 4"/></svg> Area
+            </button>
+          </div>
+
+          <div style="width:1px;height:18px;background:rgba(255,255,255,0.15);margin:0 2px;"></div>
+
+          <!-- Quarter-Step Animated Zoom & Pan Controls -->
+          <button onclick="zoomKPIChartStep('in')" title="Quarter Step Zoom In (+)" style="padding:4px 8px;border-radius:12px !important;font-size:11px;">🔍+</button>
+          <button onclick="zoomKPIChartStep('out')" title="Quarter Step Zoom Out (-)" style="padding:4px 8px;border-radius:12px !important;font-size:11px;">🔍-</button>
+          <button onclick="zoomKPIChartStep('reset')" title="Reset Scale / Home (🏠)" style="padding:4px 8px;border-radius:12px !important;font-size:11px;">🏠</button>
+          <button id="kpi-pan-btn" onclick="toggleKPIPanTool()" title="Hand / Drag Pan Tool (✋)" style="padding:4px 8px;border-radius:12px !important;font-size:11px;transition:all 0.2s ease;">✋</button>
+
+          <div style="width:1px;height:18px;background:rgba(255,255,255,0.15);margin:0 2px;"></div>
+
+          <!-- Fullscreen & Export Controls -->
+          <button onclick="toggleKPIChartFullscreen()" title="Full Screen View (⛶)" style="padding:4px 8px;border-radius:12px !important;font-size:11px;">⛶</button>
+          <button onclick="toggleKPIChartExportMenu(event)" title="Export Chart Menu (☰)" style="padding:4px 8px;border-radius:12px !important;font-size:11px;">☰</button>
+
+          <!-- Export Dropdown Sub-menu -->
+          <div id="kpi-chart-export-menu" style="display:none;position:absolute;top:32px;right:0;z-index:120;width:160px;padding:8px;background:rgba(15,23,42,0.95);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.2);border-radius:14px;box-shadow:0 12px 35px rgba(0,0,0,0.5);">
+            <div onclick="exportKPIChartPNG()" style="padding:6px 10px;cursor:pointer;font-size:11px;font-weight:700;display:flex;align-items:center;gap:6px;">📷 Download PNG</div>
+            <div onclick="exportKPIDataCSV()" style="padding:6px 10px;cursor:pointer;font-size:11px;font-weight:700;display:flex;align-items:center;gap:6px;color:#38bdf8;">📄 Export CSV</div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:20px;position:relative;flex:1;min-height:240px;display:flex;flex-direction:column;justify-content:center;align-items:center;">
+        <canvas id="kpiDetailChartCanvas" style="width:100%;height:100%;max-height:210px;"></canvas>
+        <div id="kpi-chart-legend" style="display:flex;gap:20px;margin-top:10px;font-size:11px;font-weight:700;color:#cbd5e1;">
+          <span style="color:#38bdf8;display:flex;align-items:center;gap:6px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#38bdf8;box-shadow:0 0 8px rgba(56,189,248,0.6);"></span> Actual Value</span>
+          <span style="color:#34d399;display:flex;align-items:center;gap:6px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#34d399;box-shadow:0 0 8px rgba(52,211,153,0.6);"></span> Target Value</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- SECTION 3: Bottom Data Drill Matrix Card (Smooth Breathing Space & Clean Grid) -->
+  <div id="sec-drill" class="kpi-drill-card" style="margin-bottom:24px;border-radius:14px;overflow:hidden;">
+    <div style="color:#fff;padding:12px 20px;font-weight:800;font-size:13px;display:flex;justify-content:space-between;align-items:center;">
+      <span>Data Drill</span>
+      <span onclick="exportKPIDataCSV()" title="Export CSV" style="cursor:pointer;font-size:13px;display:flex;align-items:center;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </span>
+    </div>
+    <!-- Breathing Space Container -->
+    <div style="padding:16px 20px;overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;border-radius:8px;overflow:hidden;">
+        <thead id="kpi-detail-drill-thead">
+          <!-- Dynamically rendered Period Grouped Sub-Headers -->
+        </thead>
+        <tbody id="kpi-detail-drill-tbody">
+          <!-- Dynamically rendered organizational unit rows -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SECTION 4: Bottom Cards (My Initiatives, Risks, Comments, Files) -->
+  <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:20px;">
+    <!-- 1. Initiatives Card -->
+    <div id="sec-initiatives" class="kpi-drill-card" style="display:flex;flex-direction:column;justify-content:space-between;">
+      <div style="color:#fff;padding:10px 14px;font-weight:800;font-size:12px;display:flex;justify-content:space-between;align-items:center;">
+        <span>My Initiatives</span>
+        <span style="opacity:0.7;font-size:11px;color:#cbd5e1;">Active</span>
+      </div>
+      <div style="padding:14px;min-height:120px;font-size:11px;color:#ffffff;display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);">
+          <span style="color:#34d399;font-weight:800;">•</span>
+          <span style="font-weight:600;color:#ffffff;">Q3 Revenue Optimization</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);">
+          <span style="color:#38bdf8;font-weight:800;">•</span>
+          <span style="font-weight:600;color:#ffffff;">Digital Expansion Plan</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Risks Card -->
+    <div id="sec-risks" class="kpi-drill-card" style="display:flex;flex-direction:column;justify-content:space-between;">
+      <div style="color:#fff;padding:10px 14px;font-weight:800;font-size:12px;display:flex;justify-content:space-between;align-items:center;">
+        <span>Risks</span>
+        <span style="opacity:0.7;font-size:11px;color:#cbd5e1;">Linked</span>
+      </div>
+      <div style="padding:14px;min-height:120px;font-size:11px;color:#ffffff;display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#fca5a5;">
+          <span style="font-weight:800;">•</span>
+          <span style="font-weight:700;color:#fca5a5;">Market Volatility Risk</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);color:#fde047;">
+          <span style="font-weight:800;">•</span>
+          <span style="font-weight:700;color:#fde047;">Supply Chain Delay</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Comments Card (Live Input) -->
+    <div id="sec-comments" class="kpi-drill-card" style="display:flex;flex-direction:column;justify-content:space-between;">
+      <div style="color:#fff;padding:10px 14px;font-weight:800;font-size:12px;display:flex;justify-content:space-between;align-items:center;">
+        <span>Comments</span>
+        <span style="opacity:0.7;font-size:11px;color:#cbd5e1;">Discussion</span>
+      </div>
+      <div id="kpi-detail-comments-list" style="padding:12px;min-height:90px;max-height:140px;overflow-y:auto;font-size:11px;color:#cbd5e1;">No comments yet</div>
+      <div style="padding:10px;border-top:1px solid rgba(255,255,255,0.1);">
+        <input type="text" placeholder="Type a comment & press Enter..." onkeypress="if(event.key==='Enter') window.addKPIComment(this)" style="width:100%;padding:6px 10px;border-radius:6px;font-size:11px;outline:none;" />
+      </div>
+    </div>
+
+    <!-- 4. Files Card -->
+    <div id="sec-files" class="kpi-drill-card" style="display:flex;flex-direction:column;justify-content:space-between;">
+      <div style="color:#fff;padding:10px 14px;font-weight:800;font-size:12px;display:flex;justify-content:space-between;align-items:center;">
+        <span>Files</span>
+        <span style="opacity:0.7;font-size:11px;color:#cbd5e1;">Attachments</span>
+      </div>
+      <div style="padding:14px;min-height:120px;font-size:11px;color:#ffffff;display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);">
+          <span style="color:#cbd5e1;font-weight:700;">PDF</span>
+          <span style="font-weight:600;color:#ffffff;">Q3_Metrics_Summary.pdf</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);">
+          <span style="color:#34d399;font-weight:700;">XLS</span>
+          <span style="font-weight:600;color:#ffffff;">Target_Forecast_2026.xlsx</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- KPI EDIT MODAL (Exact Screenshot 3 Match) -->
+<div id="kpi-edit-modal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9999;background:rgba(15,23,42,0.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);align-items:center;justify-content:center;">
+  <div class="kpi-modal-dialog" style="width:100%;max-width:580px;background:var(--surface,#ffffff);border:1px solid var(--border,#e2e8f0);border-radius:16px;box-shadow:0 20px 50px rgba(0,0,0,0.25);overflow:hidden;color:var(--text,#0f172a);">
+    <div style="padding:16px 24px;border-bottom:1px solid var(--border,#e2e8f0);display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-size:16px;font-weight:800;">KPI Description</span>
+      <button onclick="closeKPIEditModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3,#94a3b8);">&times;</button>
+    </div>
+    <div style="padding:24px;display:flex;flex-direction:column;gap:16px;">
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:16px;">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--text2,#64748b);margin-bottom:4px;display:block;">ID</label>
+          <input id="edit-kpi-id" type="text" readonly style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border,#cbd5e1);background:var(--bg2,#f1f5f9);color:var(--text,#0f172a);font-size:12px;font-weight:700;font-family:'DM Mono',monospace;" />
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--text2,#64748b);margin-bottom:4px;display:block;">Name</label>
+          <input id="edit-kpi-name" type="text" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border,#cbd5e1);background:var(--surface,#ffffff);color:var(--text,#0f172a);font-size:12px;font-weight:700;" />
+        </div>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:var(--text2,#64748b);margin-bottom:4px;display:block;">Description</label>
+        <textarea id="edit-kpi-desc" rows="3" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border,#cbd5e1);background:var(--surface,#ffffff);color:var(--text,#0f172a);font-size:12px;outline:none;resize:vertical;"></textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--text2,#64748b);margin-bottom:4px;display:block;">Owner</label>
+          <select id="edit-kpi-owner" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border,#cbd5e1);background:var(--surface,#ffffff);color:var(--text,#0f172a);font-size:12px;font-weight:600;">
+            <option value="Dominic">Dominic</option>
+            <option value="Arun">Arun</option>
+            <option value="Karthik">Karthik</option>
+            <option value="Admin">Admin</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--text2,#64748b);margin-bottom:4px;display:block;">Status</label>
+          <select id="edit-kpi-status" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border,#cbd5e1);background:var(--surface,#ffffff);color:var(--text,#0f172a);font-size:12px;font-weight:600;">
+            <option value="Weighted">Weighted</option>
+            <option value="Unweighted">Unweighted</option>
+            <option value="Active">Active</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:8px;">
+        <button onclick="closeKPIEditModal()" style="padding:8px 20px;border-radius:8px;border:1px solid var(--border,#cbd5e1);background:var(--bg2,#e2e8f0);color:var(--text,#0f172a);font-size:12px;font-weight:700;cursor:pointer;">Cancel</button>
+        <button onclick="saveKPIEditModal()" style="padding:8px 24px;border-radius:8px;border:none;background:#0091ff;color:#ffffff;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,145,255,0.3);">Save</button>
+      </div>
+    </div>
+    <div style="border-top:2px solid var(--border,#e2e8f0);padding:16px 24px;background:var(--bg2,#f8fafc);display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:11px;">
+      <div>
+        <div style="font-weight:800;color:var(--text,#0f172a);">Created By :</div>
+        <div id="edit-kpi-created-by" style="color:var(--text2,#64748b);">Arun</div>
+        <div style="font-weight:800;color:var(--text,#0f172a);margin-top:6px;">Created Date :</div>
+        <div id="edit-kpi-created-date" style="color:var(--text2,#64748b);">Oct 02, 2019</div>
+      </div>
+      <div>
+        <div style="font-weight:800;color:var(--text,#0f172a);">Modified By :</div>
+        <div id="edit-kpi-mod-by" style="color:var(--text2,#64748b);">Karthik</div>
+        <div style="font-weight:800;color:var(--text,#0f172a);margin-top:6px;">Modified Date :</div>
+        <div id="edit-kpi-mod-date" style="color:var(--text2,#64748b);">Oct 02, 2019</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- KPI AUDIT MODAL -->
+<div id="kpi-audit-modal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9999;background:rgba(15,23,42,0.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);align-items:center;justify-content:center;">
+  <div class="kpi-modal-dialog" style="width:100%;max-width:540px;background:var(--surface,#ffffff);border:1px solid var(--border,#e2e8f0);border-radius:16px;box-shadow:0 20px 50px rgba(0,0,0,0.25);overflow:hidden;color:var(--text,#0f172a);">
+    <div style="padding:16px 24px;border-bottom:1px solid var(--border,#e2e8f0);display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-size:16px;font-weight:800;">KPI Audit Log & Governance</span>
+      <button onclick="closeKPIAuditModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3,#94a3b8);">&times;</button>
+    </div>
+    <div style="padding:24px;display:flex;flex-direction:column;gap:12px;font-size:12px;">
+      <div style="display:flex;justify-content:space-between;padding:10px 14px;background:var(--surface2,rgba(0,145,255,0.04));border-radius:8px;border:1px solid var(--border,#e2e8f0);">
+        <span style="font-weight:700;">Data Integration Source:</span>
+        <span style="color:#0091ff;font-weight:800;font-family:'DM Mono',monospace;">MySQL (org_kpi_details)</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:10px 14px;background:var(--surface2,rgba(0,145,255,0.04));border-radius:8px;border:1px solid var(--border,#e2e8f0);">
+        <span style="font-weight:700;">Formula:</span>
+        <span style="font-family:'DM Mono',monospace;color:var(--text,#0f172a);">GAP = Actual - Target</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:10px 14px;background:var(--surface2,rgba(0,145,255,0.04));border-radius:8px;border:1px solid var(--border,#e2e8f0);">
+        <span style="font-weight:700;">Last Automated Sync:</span>
+        <span style="color:#10b981;font-weight:700;">Live (Real-time DB query)</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:10px 14px;background:var(--surface2,rgba(0,145,255,0.04));border-radius:8px;border:1px solid var(--border,#e2e8f0);">
+        <span style="font-weight:700;">Governance Model:</span>
+        <span style="font-weight:700;">Role-based Single-Query Ownership</span>
+      </div>
+    </div>
+    <div style="padding:16px 24px;border-top:1px solid var(--border,#e2e8f0);text-align:right;background:var(--bg2,#f8fafc);">
+      <button onclick="closeKPIAuditModal()" style="padding:8px 20px;border-radius:8px;border:none;background:#0091ff;color:#ffffff;font-size:12px;font-weight:700;cursor:pointer;">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Fullscreen Interactive Chart Modal -->
+<div id="kpi-chart-fullscreen-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:rgba(7,10,19,0.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);flex-direction:column;padding:30px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;color:#fff;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span style="font-size:18px;font-weight:900;">📈 Enterprise Chart Analysis — Actual v/s Target</span>
+      <span style="background:rgba(0,145,255,0.2);border:1px solid rgba(0,145,255,0.4);color:#38bdf8;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;">Full-Screen Mode</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button onclick="exportKPIChartPNG()" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:20px;padding:6px 16px;cursor:pointer;font-size:12px;font-weight:700;">📷 Download PNG</button>
+      <button onclick="toggleKPIChartFullscreen()" style="background:#ef4444;border:none;color:#fff;border-radius:20px;padding:6px 18px;cursor:pointer;font-size:12px;font-weight:800;">✕ Close</button>
+    </div>
+  </div>
+  <div style="flex:1;position:relative;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:24px;display:flex;justify-content:center;align-items:center;">
+    <canvas id="kpiFsChartCanvas" style="width:100%;height:100%;"></canvas>
+  </div>
+</div>
 
 <!-- SCORECARD PANEL -->
 <div class="panel" id="view-scorecard">
   <div style="margin-bottom:20px">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
       <div>
-        <div style="font-size:20px;font-weight:800">🎯 Strategy Scorecard</div>
-        <div style="font-size:12px;color:var(--text3)">6 Perspectives · Real-time Balanced Scorecard Analytics</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="font-size:20px;font-weight:800">🎯 Scorecard</span>
+          <span id="sc-overall-chip" style="display:none;font-size:11px;font-weight:800;padding:4px 12px;border-radius:99px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.35);color:#10b981;font-family:'DM Mono',monospace;">Overall Score: —</span>
+        </div>
+        <div id="sc-header-subtitle" style="font-size:12px;color:var(--text3)">Real-time Balanced Scorecard Analytics</div>
       </div>
-      <div style="display:flex;gap:10px">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <select id="sc-scorecard-select" onchange="onScorecardSelect(this.value)" style="padding:7px 12px;border-radius:10px;border:1px solid var(--border,#334155);background:var(--surface,#1e293b);color:var(--text,#f8fafc);font-size:12px;font-weight:600;cursor:pointer;outline:none;max-width:280px;"></select>
         <button class="btn btn-primary" onclick="toggleStrategyMap()">🗺️ Show Strategy Map</button>
         <button class="btn btn-ghost" onclick="openScorecardConfig()">⚙️ Configure</button>
       </div>
@@ -9942,13 +10905,7 @@ else{setTimeout(initRiskPage,100);}
       </button>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
         <span style="font-size:11px;font-weight:700;color:var(--text3,#64748b);text-transform:uppercase;letter-spacing:0.06em;margin-right:4px;">Inner Drill-Down:</span>
-        <button class="sc-inner-tab-btn" data-persp="financial" onclick="switchScorecardTab('financial',this)" style="padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border,#1e293b);cursor:pointer;background:transparent;color:var(--text,#f8fafc);">💰 Financial</button>
-        <button class="sc-inner-tab-btn" data-persp="customer" onclick="switchScorecardTab('customer',this)" style="padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border,#1e293b);cursor:pointer;background:transparent;color:var(--text,#f8fafc);">👥 Customer</button>
-        <button class="sc-inner-tab-btn" data-persp="ops" onclick="switchScorecardTab('ops',this)" style="padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border,#1e293b);cursor:pointer;background:transparent;color:var(--text,#f8fafc);">⚙️ Ops Excellence</button>
-        <button class="sc-inner-tab-btn" data-persp="projects" onclick="switchScorecardTab('projects',this)" style="padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border,#1e293b);cursor:pointer;background:transparent;color:var(--text,#f8fafc);">🏗️ Capital Projects</button>
-        <button class="sc-inner-tab-btn" data-persp="esg" onclick="switchScorecardTab('esg',this)" style="padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border,#1e293b);cursor:pointer;background:transparent;color:var(--text,#f8fafc);">🌿 ESG &amp; Compliance</button>
-        <button class="sc-inner-tab-btn" data-persp="people" onclick="switchScorecardTab('people',this)" style="padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border,#1e293b);cursor:pointer;background:transparent;color:var(--text,#f8fafc);">📚 People &amp; Capability</button>
-        <button class="sc-inner-tab-btn" data-persp="risk" onclick="switchScorecardTab('risk',this)" style="padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border,#1e293b);cursor:pointer;background:transparent;color:var(--text,#f8fafc);">⚠️ Risk &amp; Security</button>
+        <div id="sc-tab-bar" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;"></div>
       </div>
     </div>
 
@@ -9972,21 +10929,25 @@ else{setTimeout(initRiskPage,100);}
           <div id="sc-active-persp-kpi-count" style="font-size:24px;font-weight:800;font-family:'DM Mono',monospace;line-height:1;margin-top:2px;">9</div>
         </div>
         <div style="width:1px;height:32px;background:rgba(255,255,255,0.2);"></div>
-        <div style="display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:600;">
-          <span id="sc-active-persp-ontrack" style="color:#4ade80;">🟢 9 On Track</span>
-          <span id="sc-active-persp-atrisk" style="color:#fbbf24;">🟡 0 At Risk</span>
-          <span id="sc-active-persp-critical" style="color:#f87171;">🔴 0 Critical</span>
+        <div id="sc-active-persp-status-counts" style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px;font-weight:600;max-width:360px;">
+          <span id="sc-active-persp-outstanding" style="color:#38bdf8;padding:2px 6px;background:rgba(56,189,248,0.15);border-radius:6px;">🔵 0 Outstanding</span>
+          <span id="sc-active-persp-ontrack" style="color:#4ade80;padding:2px 6px;background:rgba(74,222,128,0.15);border-radius:6px;">🟢 0 On Track</span>
+          <span id="sc-active-persp-moderate" style="color:#facc15;padding:2px 6px;background:rgba(250,204,21,0.15);border-radius:6px;">🟡 0 Moderate</span>
+          <span id="sc-active-persp-atrisk" style="color:#fb923c;padding:2px 6px;background:rgba(251,146,60,0.15);border-radius:6px;">🟠 0 At Risk</span>
+          <span id="sc-active-persp-critical" style="color:#f87171;padding:2px 6px;background:rgba(248,113,113,0.15);border-radius:6px;">🔴 0 Critical</span>
         </div>
       </div>
     </div>
 
     <!-- Filter & Search Controls Bar -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;background:var(--bg2,#0f172a);padding:12px 16px;border-radius:12px;border:1px solid var(--border,#1e293b);">
-      <div style="display:flex;align-items:center;gap:8px;">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
         <span style="font-size:11px;font-weight:700;color:var(--text3,#64748b);text-transform:uppercase;letter-spacing:0.06em;margin-right:4px;">Filter Status:</span>
         <button class="sc-status-filter-btn active" data-status="all" onclick="filterPerspectiveByStatus('all',this)" style="padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;border:none;cursor:pointer;background:#0091ff;color:#fff;">All</button>
+        <button class="sc-status-filter-btn" data-status="outstanding" onclick="filterPerspectiveByStatus('outstanding',this)" style="padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border);cursor:pointer;background:transparent;color:var(--text2);">🔵 Outstanding</button>
         <button class="sc-status-filter-btn" data-status="on-track" onclick="filterPerspectiveByStatus('on-track',this)" style="padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border);cursor:pointer;background:transparent;color:var(--text2);">🟢 On Track</button>
-        <button class="sc-status-filter-btn" data-status="at-risk" onclick="filterPerspectiveByStatus('at-risk',this)" style="padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border);cursor:pointer;background:transparent;color:var(--text2);">🟡 At Risk</button>
+        <button class="sc-status-filter-btn" data-status="moderate" onclick="filterPerspectiveByStatus('moderate',this)" style="padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border);cursor:pointer;background:transparent;color:var(--text2);">🟡 Moderate</button>
+        <button class="sc-status-filter-btn" data-status="at-risk" onclick="filterPerspectiveByStatus('at-risk',this)" style="padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border);cursor:pointer;background:transparent;color:var(--text2);">🟠 At Risk</button>
         <button class="sc-status-filter-btn" data-status="critical" onclick="filterPerspectiveByStatus('critical',this)" style="padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border);cursor:pointer;background:transparent;color:var(--text2);">🔴 Critical</button>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
@@ -10002,10 +10963,10 @@ else{setTimeout(initRiskPage,100);}
             <th style="padding:12px 16px;text-align:left;width:100px;">Status</th>
             <th style="padding:12px 16px;text-align:left;width:90px;">Code</th>
             <th style="padding:12px 16px;text-align:left;">KPI / Sub-KPI Name</th>
-            <th style="padding:12px 16px;text-align:left;width:110px;">Period</th>
-            <th style="padding:12px 16px;text-align:right;width:90px;">Score</th>
-            <th style="padding:12px 16px;text-align:right;width:130px;">Actual</th>
-            <th style="padding:12px 16px;text-align:right;width:130px;">Target</th>
+            <th style="padding:12px 16px;text-align:left;width:100px;">Period</th>
+            <th style="padding:12px 16px;text-align:right;width:80px;">Score</th>
+            <th style="padding:12px 16px;text-align:right;width:120px;">Actual</th>
+            <th style="padding:12px 16px;text-align:right;width:120px;">Target</th>
             <th style="padding:12px 16px;text-align:center;width:80px;">Actions</th>
           </tr>
         </thead>
@@ -10068,11 +11029,52 @@ else{setTimeout(initRiskPage,100);}
       'people':    { title: 'People and Organisational Capability', icon: '📚', color: 'linear-gradient(135deg, #ef4444, #dc2626)' }
     };
 
+    function normalizeKPIStatus(k) {
+      if (!k) return 'critical';
+      var st = '';
+      if (typeof k === 'string') {
+        st = k.toLowerCase().trim();
+      } else if (typeof k === 'object') {
+        st = (k.status || (k.status_info && k.status_info.status_code) || (k.status_info && k.status_info.label) || '').toLowerCase().trim();
+      }
+
+      if (st === 'outstanding' || st.includes('outstanding') || st === 'tier 5' || st === 'tier5') return 'outstanding';
+      if (st === 'on-track' || st === 'on_track' || st === 'on track' || st === 'on_target' || st.includes('on target') || st.includes('on track')) return 'on-track';
+      if (st === 'moderate' || st === 'moderately_on_track' || st === 'moderately on track' || st.includes('moderate')) return 'moderate';
+      if (st === 'at-risk' || st === 'at_risk' || st === 'at risk' || st === 'underperforming' || st.includes('underperforming') || st.includes('at risk')) return 'at-risk';
+      if (st === 'critical' || st === 'lagging' || st === 'off-track' || st === 'off track' || st.includes('critical') || st.includes('lagging')) return 'critical';
+
+      var sc = (typeof k === 'object' && k !== null && k.score !== undefined && k.score !== null) ? parseFloat(k.score) : null;
+      if (sc !== null && !isNaN(sc)) {
+        if (sc >= 110) return 'outstanding';
+        if (sc >= 95) return 'on-track';
+        if (sc >= 80) return 'moderate';
+        if (sc >= 60) return 'at-risk';
+        return 'critical';
+      }
+      return 'critical';
+    }
+    window.normalizeKPIStatus = normalizeKPIStatus;
+
     function pct(a,t){ var aa=parseFloat(a)||0, tt=parseFloat(t)||0; return tt>0?Math.min(100,Math.round(aa/tt*100)):Math.min(100,aa); }
-    function itemColor(s) { var ls=(s||'').toLowerCase(); return ls==='on-track'||ls==='on track'?'#10b981':ls==='at-risk'||ls==='at risk'?'#f59e0b':ls==='critical'?'#ef4444':'#94a3b8'; }
-    function itemArrow(s) { var ls=(s||'').toLowerCase(); return ls==='on-track'||ls==='on track'?'↑':ls==='at-risk'||ls==='at risk'?'→':ls==='critical'?'↓':'◆'; }
-    function scoreColor(sc) { return sc>=75?'#10b981':sc>=50?'#f59e0b':'#ef4444'; }
-    function scoreLabel(sc) { return sc>=75?'↑ On Track':sc>=50?'→ At Risk':'↓ Critical'; }
+    function itemColor(s) {
+      var norm = normalizeKPIStatus(s);
+      if (norm === 'outstanding') return '#06b6d4';
+      if (norm === 'on-track') return '#10b981';
+      if (norm === 'moderate') return '#eab308';
+      if (norm === 'at-risk') return '#f97316';
+      return '#ef4444';
+    }
+    function itemArrow(s) {
+      var norm = normalizeKPIStatus(s);
+      if (norm === 'outstanding') return '↑↑';
+      if (norm === 'on-track') return '↑';
+      if (norm === 'moderate') return '↗';
+      if (norm === 'at-risk') return '→';
+      return '↓';
+    }
+    function scoreColor(sc) { return sc>=95?'#10b981':sc>=80?'#eab308':sc>=60?'#f97316':'#ef4444'; }
+    function scoreLabel(sc) { return sc>=110?'🔵 Outstanding':sc>=95?'🟢 On Track':sc>=80?'🟡 Moderate':sc>=60?'🟠 At Risk':'🔴 Critical'; }
 
     function perspToTabKey(p) {
       if (!p) return 'all';
@@ -10191,14 +11193,20 @@ else{setTimeout(initRiskPage,100);}
 
       if (!tbody) return;
 
-      const meta = PERSP_META[tabKey] || (typeof resolvePerspectiveMeta === 'function' ? resolvePerspectiveMeta(tabKey) : { title: 'Perspective Details', icon: '📊', color: 'linear-gradient(135deg,#0091ff,#0060df)' });
+      var metaSrcName = tabKey;
+      if (window._balancedScorecardData && Array.isArray(window._balancedScorecardData.perspectives)) {
+        var metaMatch = window._balancedScorecardData.perspectives.find(function(p) { return p.tab === tabKey || perspToTabKey(p.name) === tabKey; });
+        if (metaMatch) metaSrcName = metaMatch.name;
+      }
+      const meta = PERSP_META[tabKey] || (typeof resolvePerspectiveMeta === 'function' ? resolvePerspectiveMeta(metaSrcName, null) : { title: 'Perspective Details', icon: '📊', color: 'linear-gradient(135deg,#0091ff,#0060df)' });
+      if (!meta.title) meta.title = (metaSrcName && metaSrcName !== tabKey) ? metaSrcName : 'Perspective Details';
       if (titleEl) titleEl.textContent = kpiFilter ? meta.title + ' · ' + kpiFilter : meta.title;
       if (iconEl) iconEl.textContent = meta.icon;
       if (bannerEl) bannerEl.style.background = meta.color || meta.accent;
 
       if (!window._balancedScorecardData && !window._loadingBalancedScorecard) {
         window._loadingBalancedScorecard = true;
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:36px;color:var(--text2,#94a3b8);font-size:13px;">⚡ Loading SKL Balanced Scorecard metrics...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:36px;color:var(--text2,#94a3b8);font-size:13px;">⚡ Loading Balanced Scorecard metrics...</td></tr>';
         if (typeof window.loadScorecards === 'function') {
           window.loadScorecards().finally(function() { window._loadingBalancedScorecard = false; });
         }
@@ -10216,19 +11224,24 @@ else{setTimeout(initRiskPage,100);}
           if (scoreEl) scoreEl.textContent = (Math.round(activePersp.score || 0)) + '%';
           if (countEl) countEl.textContent = activePersp.total_kpis || 0;
 
-          var bOnTrackCount = 0, bAtRiskCount = 0, bCriticalCount = 0;
+          var bOutstandingCount = 0, bOnTrackCount = 0, bModerateCount = 0, bAtRiskCount = 0, bCriticalCount = 0;
           (activePersp.objectives || []).forEach(function(obj) {
             (obj.kpis || []).forEach(function(k) {
-              var st = (k.status || '').toLowerCase();
-              if (st === 'on-track' || st === 'on track') bOnTrackCount++;
-              else if (st === 'at-risk' || st === 'at risk') bAtRiskCount++;
-              else if (st === 'critical' || st === 'lagging') bCriticalCount++;
-              else bOnTrackCount++;
+              var stNorm = normalizeKPIStatus(k);
+              if (stNorm === 'outstanding') bOutstandingCount++;
+              else if (stNorm === 'on-track') bOnTrackCount++;
+              else if (stNorm === 'moderate') bModerateCount++;
+              else if (stNorm === 'at-risk') bAtRiskCount++;
+              else bCriticalCount++;
             });
           });
 
+          var outstandingEl = document.getElementById('sc-active-persp-outstanding');
+          if (outstandingEl) outstandingEl.textContent = '🔵 ' + bOutstandingCount + ' Outstanding';
           if (onTrackEl) onTrackEl.textContent = '🟢 ' + bOnTrackCount + ' On Track';
-          if (atRiskEl) atRiskEl.textContent = '🟡 ' + bAtRiskCount + ' At Risk';
+          var moderateEl = document.getElementById('sc-active-persp-moderate');
+          if (moderateEl) moderateEl.textContent = '🟡 ' + bModerateCount + ' Moderate';
+          if (atRiskEl) atRiskEl.textContent = '🟠 ' + bAtRiskCount + ' At Risk';
           if (criticalEl) criticalEl.textContent = '🔴 ' + bCriticalCount + ' Critical';
 
           let h = '';
@@ -10239,9 +11252,9 @@ else{setTimeout(initRiskPage,100);}
               kpis = kpis.filter(function(k) { return (k.name || '').toLowerCase().includes(q); });
             }
             if (currentStatusFilter && currentStatusFilter !== 'all') {
+              var targetNormKey = normalizeKPIStatus(currentStatusFilter);
               kpis = kpis.filter(function(k) {
-                var st = (k.status || '').toLowerCase().replace(/\s+/g, '-');
-                return st === currentStatusFilter;
+                return normalizeKPIStatus(k) === targetNormKey;
               });
             }
             if (currentSearchQuery) {
@@ -10259,21 +11272,26 @@ else{setTimeout(initRiskPage,100);}
                 <div style="display:flex;align-items:center;justify-content:space-between;">
                   <div style="display:flex;align-items:center;gap:10px;">
                     <span style="font-weight:800;color:var(--text,#f8fafc);font-size:13px;">${obj.id} - ${obj.name}</span>
+                    ${obj.weight && Math.abs(obj.weight - 1) > 0.01 ? `<span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:99px;background:rgba(0,145,255,0.12);border:1px solid rgba(0,145,255,0.3);color:#38bdf8;font-family:'DM Mono',monospace;">Weight: ${obj.weight}%</span>` : ''}
                     <span style="font-size:10px;color:var(--text3,#94a3b8);font-family:'DM Mono',monospace;">(${kpis.length} KPIs)</span>
-                  </div>
-                  <div style="font-weight:700;color:${scoreColor(objScore)};font-family:'DM Mono',monospace;font-size:12px;">
-                    Objective Score: ${objScore}%
                   </div>
                 </div>
               </td>
             </tr>`;
 
             kpis.forEach(function(kpi) {
-              var st = (kpi.status || 'on-track').toLowerCase();
-              var badgeBg = (st === 'on-track' || st === 'on track') ? 'rgba(16,185,129,0.15)' : (st === 'at-risk' || st === 'at risk') ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)';
-              var badgeColor = (st === 'on-track' || st === 'on track') ? '#10b981' : (st === 'at-risk' || st === 'at risk') ? '#f59e0b' : '#ef4444';
-              var badgeText = (st === 'on-track' || st === 'on track') ? '🟢 On Track' : (st === 'at-risk' || st === 'at risk') ? '🟡 At Risk' : '🔴 Critical';
+              var normSt = normalizeKPIStatus(kpi);
+              var sInfo = kpi.status_info || {};
+              var badgeBg = sInfo.bg || (normSt === 'outstanding' ? 'rgba(6,182,212,0.15)' : normSt === 'on-track' ? 'rgba(16,185,129,0.15)' : normSt === 'moderate' ? 'rgba(234,179,8,0.15)' : normSt === 'at-risk' ? 'rgba(249,115,22,0.15)' : 'rgba(239,68,68,0.15)');
+              var badgeColor = sInfo.color || (normSt === 'outstanding' ? '#06b6d4' : normSt === 'on-track' ? '#10b981' : normSt === 'moderate' ? '#eab308' : normSt === 'at-risk' ? '#f97316' : '#ef4444');
+              var badgeIcon = sInfo.icon || (normSt === 'outstanding' ? '🔵' : normSt === 'on-track' ? '🟢' : normSt === 'moderate' ? '🟡' : normSt === 'at-risk' ? '🟠' : '🔴');
+              var badgeLabel = sInfo.label || (normSt === 'outstanding' ? 'Outstanding' : normSt === 'on-track' ? 'On Track' : normSt === 'moderate' ? 'Moderate' : normSt === 'at-risk' ? 'At Risk' : 'Critical');
+              var badgeText = badgeIcon + ' ' + badgeLabel;
               var kpiScore = Math.round(kpi.score || 0);
+
+              var trendText = kpi.trend_formatted || (kpi.trend === 'up' ? '+5.0% ↑' : (kpi.trend === 'down' ? '-2.0% ↓' : '0.0% →'));
+              var trendColor = kpi.trend === 'up' ? '#10b981' : (kpi.trend === 'down' ? '#ef4444' : '#eab308');
+              var trendBg = kpi.trend === 'up' ? 'rgba(16,185,129,0.12)' : (kpi.trend === 'down' ? 'rgba(239,68,68,0.12)' : 'rgba(234,179,8,0.12)');
 
               h += `<tr style="border-bottom:1px solid var(--border,#1e293b);background:var(--bg2,#0f172a);transition:background 0.15s ease;">
                 <td style="padding:12px 16px;">
@@ -10281,17 +11299,48 @@ else{setTimeout(initRiskPage,100);}
                 </td>
                 <td style="padding:12px 16px;font-family:'DM Mono',monospace;font-weight:700;color:var(--text3,#94a3b8);font-size:11px;">${kpi.id}</td>
                 <td style="padding:12px 16px;font-weight:600;color:var(--text,#f8fafc);font-size:12px;">
-                  ${kpi.name}
+                  <a href="#" onclick="event.preventDefault(); window.openKPIDetailView('${kpi.id}','${(kpi.name||'').replace(/'/g,"\\'")}')" style="color:var(--text,#f8fafc);text-decoration:none;font-weight:600;border-bottom:1px dashed rgba(56,189,248,0.4);cursor:pointer;">${kpi.name}</a>
                   ${kpi.weight ? `<span style="font-size:10px;color:var(--text3,#64748b);margin-left:6px;font-weight:400;">(Weight: ${kpi.weight})</span>` : ''}
+                  ${Array.isArray(kpi.subKpiList) && kpi.subKpiList.length > 0 ? `<span style="font-size:9px;font-weight:700;margin-left:6px;padding:1px 6px;border-radius:4px;background:rgba(56,189,248,0.15);color:#38bdf8;">${kpi.subKpiList.length} Sub-KPIs</span>` : ''}
                 </td>
                 <td style="padding:12px 16px;color:var(--text2,#cbd5e1);font-size:11px;">${kpi.period || 'Quarterly'}</td>
-                <td style="padding:12px 16px;text-align:right;font-family:'DM Mono',monospace;font-weight:700;color:${scoreColor(kpiScore)};font-size:12px;">${kpiScore}% ${itemArrow(st)}</td>
+                <td style="padding:12px 16px;text-align:right;font-family:'DM Mono',monospace;font-weight:700;color:${scoreColor(kpiScore)};font-size:12px;">${kpiScore}%</td>
                 <td style="padding:12px 16px;text-align:right;font-family:'DM Mono',monospace;font-weight:700;color:var(--text,#f8fafc);font-size:12px;">${kpi.actual_formatted || kpi.actual || '—'}</td>
                 <td style="padding:12px 16px;text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:var(--text2,#94a3b8);font-size:12px;">${kpi.target_formatted || kpi.target || '—'}</td>
                 <td style="padding:12px 16px;text-align:center;">
-                  <button style="padding:3px 8px;border-radius:6px;border:1px solid var(--border,#334155);background:var(--surface,#1e293b);color:var(--blue2,#38bdf8);font-size:10px;font-weight:600;cursor:pointer;">Detail</button>
+                  <button onclick="window.openKPIDetailView('${kpi.id}','${(kpi.name||'').replace(/'/g,"\\'")}')" style="padding:3px 8px;border-radius:6px;border:1px solid var(--border,#334155);background:var(--surface,#1e293b);color:var(--blue2,#38bdf8);font-size:10px;font-weight:600;cursor:pointer;">Detail</button>
                 </td>
               </tr>`;
+
+              if (Array.isArray(kpi.subKpiList) && kpi.subKpiList.length > 0) {
+                kpi.subKpiList.forEach(function(sub) {
+                  var subNorm = normalizeKPIStatus(sub);
+                  var subInfo = sub.status_info || {};
+                  var subBg = subInfo.bg || (subNorm === 'outstanding' ? 'rgba(6,182,212,0.15)' : subNorm === 'on-track' ? 'rgba(16,185,129,0.15)' : subNorm === 'moderate' ? 'rgba(234,179,8,0.15)' : subNorm === 'at-risk' ? 'rgba(249,115,22,0.15)' : 'rgba(239,68,68,0.15)');
+                  var subColor = subInfo.color || (subNorm === 'outstanding' ? '#06b6d4' : subNorm === 'on-track' ? '#10b981' : subNorm === 'moderate' ? '#eab308' : subNorm === 'at-risk' ? '#f97316' : '#ef4444');
+                  var subIcon = subInfo.icon || (subNorm === 'outstanding' ? '🔵' : subNorm === 'on-track' ? '🟢' : subNorm === 'moderate' ? '🟡' : subNorm === 'at-risk' ? '🟠' : '🔴');
+                  var subLabel = subInfo.label || (subNorm === 'outstanding' ? 'Outstanding' : subNorm === 'on-track' ? 'On Track' : subNorm === 'moderate' ? 'Moderate' : subNorm === 'at-risk' ? 'At Risk' : 'Critical');
+                  var subScore = Math.round(sub.score || 0);
+
+                  h += `<tr style="border-bottom:1px dashed var(--border,#e2e8f0);background:rgba(148,163,184,0.08);">
+                    <td style="padding:8px 12px;text-align:center;">
+                      <span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:9px;font-weight:700;background:${subBg};color:${subColor};border:1px solid ${subColor}44;">${subIcon} ${subLabel}</span>
+                    </td>
+                    <td style="padding:8px 12px;font-family:'DM Mono',monospace;font-size:10px;color:var(--text3,#64748b);">└ Sub</td>
+                    <td style="padding:8px 16px;font-size:11px;font-weight:500;color:var(--text1,#1e293b);">
+                      <a href="#" onclick="event.preventDefault(); window.openKPIDetailView('${sub.id||kpi.id}','${(sub.name||'').replace(/'/g,"\\'")}')" style="color:var(--text,#f8fafc);text-decoration:none;font-weight:600;border-bottom:1px dashed rgba(56,189,248,0.4);cursor:pointer;">↳ ${sub.name}</a>
+                      <span style="font-size:9px;color:var(--text3,#64748b);margin-left:4px;">(Weight: ${sub.weight})</span>
+                    </td>
+                    <td style="padding:8px 12px;font-size:10px;color:var(--text3,#64748b);">Sub-Item</td>
+                    <td style="padding:8px 12px;text-align:right;font-family:'DM Mono',monospace;font-weight:700;color:${scoreColor(subScore)};font-size:11px;">${subScore}%</td>
+                    <td style="padding:8px 12px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;color:var(--text1,#1e293b);">${sub.actual || '—'}</td>
+                    <td style="padding:8px 12px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;color:var(--text3,#64748b);">${sub.target || '—'}</td>
+                    <td style="padding:8px 12px;text-align:center;">
+                      <button onclick="window.openKPIDetailView('${sub.id||kpi.id}','${(sub.name||'').replace(/'/g,"\\'")}')" style="padding:2px 6px;border-radius:4px;border:1px solid var(--border,#334155);background:var(--surface,#1e293b);color:var(--blue2,#38bdf8);font-size:9px;font-weight:600;cursor:pointer;">Detail</button>
+                    </td>
+                  </tr>`;
+                });
+              }
             });
           });
 
@@ -10308,16 +11357,1268 @@ else{setTimeout(initRiskPage,100);}
     }
     window.renderPerspectiveDetailTable = renderPerspectiveDetailTable;
 
-    async function loadScorecards() {
+    window._activeScorecardId = 0;
+
+    function resolveInitialScorecardId() {
+      try {
+        var qs = new URLSearchParams(window.location.search).get('scorecard_id');
+        if (qs && parseInt(qs, 10) > 0) return parseInt(qs, 10);
+        var m = (window.location.hash || '').match(/[?#&]scorecard_id=(\d+)/);
+        if (m && parseInt(m[1], 10) > 0) return parseInt(m[1], 10);
+      } catch (e) {}
+      return 0;
+    }
+
+    function renderTabBar(bData) {
+      var bar = document.getElementById('sc-tab-bar');
+      if (!bar || !bData || !Array.isArray(bData.perspectives)) return;
+      var html = '';
+      bData.perspectives.forEach(function(p) {
+        var tabKey = p.tab || perspToTabKey(p.name);
+        var m = resolvePerspectiveMeta(p.name, null);
+        var nm = String(p.name || 'Perspective').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        html += '<button class="sc-inner-tab-btn" data-persp="' + tabKey + '" onclick="switchScorecardTab(\'' + tabKey + '\',this)" style="padding:6px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border,#1e293b);cursor:pointer;background:transparent;color:var(--text,#f8fafc);">' + (m.icon || '📊') + ' ' + nm + '</button>';
+      });
+      bar.innerHTML = html;
+    }
+
+    function updateScorecardHeader(bData) {
+      if (!bData) return;
+      var chip = document.getElementById('sc-overall-chip');
+      if (chip) {
+        var rawOs = bData.overall_score;
+        if (rawOs === null || rawOs === undefined || isNaN(Number(rawOs)) || Number(rawOs) <= 0) {
+          chip.style.display = 'none';
+        } else {
+          var os = Number(rawOs);
+          var cc = scoreColor(Math.round(os));
+          chip.textContent = 'Overall Score: ' + os.toFixed(1) + '%';
+          chip.style.display = 'inline-block';
+          chip.style.color = cc;
+          chip.style.background = cc + '1f';
+          chip.style.borderColor = cc + '59';
+        }
+      }
+      var sub = document.getElementById('sc-header-subtitle');
+      if (sub) {
+        var np = bData.total_perspectives || (bData.perspectives ? bData.perspectives.length : 0);
+        sub.textContent = (bData.scorecard_name || 'Balanced Scorecard') + ' · ' + np + ' Perspectives · ' + (bData.total_kpis || 0) + ' KPIs';
+      }
+    }
+
+    let _currentKPIChart = null;
+    let _currentKPIChartType = 'line';
+    let _currentKPIData = null;
+
+    window.openKPIDetailView = async function(kpiId, kpiName) {
+      document.querySelectorAll('.panel').forEach(function(p) { p.style.display = 'none'; p.classList.remove('active'); });
+      var kpiView = document.getElementById('view-kpi-detail');
+      if (kpiView) {
+        kpiView.style.display = 'block';
+        kpiView.classList.add('active');
+      }
+
+      var titleEl = document.getElementById('kpi-detail-title');
+      if (titleEl) titleEl.textContent = kpiName || kpiId;
+
+      // Extract dynamic user initials
+      var badge = document.getElementById('kpi-user-badge');
+      if (badge) {
+        var username = (window.currentUser && (window.currentUser.full_name || window.currentUser.name || window.currentUser.email)) || 'Dominic';
+        var parts = String(username).trim().split(/\s+/);
+        var inits = parts.length > 1 ? (parts[0][0] + parts[1][0]) : parts[0].substring(0, 2);
+        badge.textContent = inits.toUpperCase();
+      }
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      try {
+        var url = (window.BACKEND || '') + '/scorecards/kpi-detail?kpi_id=' + encodeURIComponent(kpiId);
+        var dStart = (window.gperiodState && window.gperiodState.startDate) ? window.gperiodState.startDate : '';
+        var dEnd = (window.gperiodState && window.gperiodState.endDate) ? window.gperiodState.endDate : '';
+        if (dStart && dEnd) {
+          url += '&date_range=' + encodeURIComponent(dStart + ' - ' + dEnd);
+        }
+        const resp = await (window.authFetch || fetch)(url);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        _currentKPIData = data;
+
+        renderKPIDataTable(data.data_table || []);
+        renderKPIChart(data.chart || {});
+        renderKPIDataDrill(data.data_drill || {});
+        if (typeof filterKPIDataByGlobalRange === 'function' && window.gperiodState && window.gperiodState.startDate && window.gperiodState.endDate) {
+          filterKPIDataByGlobalRange(window.gperiodState.startDate, window.gperiodState.endDate);
+        }
+      } catch (err) {
+        console.error('Failed to load KPI detail:', err);
+      }
+    };
+
+    window.closeKPIDetailView = function() {
+      document.querySelectorAll('.panel').forEach(function(p) {
+        p.style.display = 'none';
+        p.classList.remove('active');
+      });
+      var scView = document.getElementById('view-scorecard');
+      var kpiView = document.getElementById('view-kpi-detail');
+      if (kpiView) {
+        kpiView.style.display = 'none';
+        kpiView.classList.remove('active');
+      }
+      if (scView) {
+        scView.style.display = 'block';
+        scView.classList.add('active');
+      }
+      if (_currentKPIChart) {
+        try { _currentKPIChart.destroy(); } catch (e) {}
+        _currentKPIChart = null;
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    window.openKPIDetail = window.openKPIDetailView;
+    window.backToScorecard = window.closeKPIDetailView;
+
+    // Modals & Menu Actions
+    window.openKPIEditModal = function() {
+      var modal = document.getElementById('kpi-edit-modal');
+      if (!modal) return;
+      var titleEl = document.getElementById('kpi-detail-title');
+      var kName = titleEl ? titleEl.textContent : 'Revenue growth rate';
+      var kId = (_currentKPIData && _currentKPIData.kpi_id) || 'SKL-K01';
+
+      var inputId = document.getElementById('edit-kpi-id');
+      var inputName = document.getElementById('edit-kpi-name');
+      var inputDesc = document.getElementById('edit-kpi-desc');
+      if (inputId) inputId.value = kId;
+      if (inputName) inputName.value = kName;
+      if (inputDesc) inputDesc.value = kName + ' (%)';
+
+      modal.style.display = 'flex';
+    };
+
+    window.closeKPIEditModal = function() {
+      var modal = document.getElementById('kpi-edit-modal');
+      if (modal) modal.style.display = 'none';
+    };
+
+    window.saveKPIEditModal = function() {
+      var inputName = document.getElementById('edit-kpi-name');
+      var titleEl = document.getElementById('kpi-detail-title');
+      if (inputName && inputName.value.trim() && titleEl) {
+        titleEl.textContent = inputName.value.trim();
+      }
+      closeKPIEditModal();
+      if (window.showToast) window.showToast('KPI details updated successfully!');
+    };
+
+    window.openKPIAuditModal = function() {
+      var modal = document.getElementById('kpi-audit-modal');
+      if (modal) modal.style.display = 'flex';
+    };
+
+    window.closeKPIAuditModal = function() {
+      var modal = document.getElementById('kpi-audit-modal');
+      if (modal) modal.style.display = 'none';
+    };
+
+    window.toggleKPIPanelSection = function(sectionId, visible) {
+      var el = document.getElementById(sectionId);
+      if (!el) return;
+      if (sectionId === 'sec-drill') {
+        el.style.display = visible ? 'block' : 'none';
+      } else {
+        el.style.display = visible ? 'flex' : 'none';
+      }
+    };
+
+    window.toggleKPISectionMenu = function(e) {
+      if (e) e.stopPropagation();
+      var menu = document.getElementById('kpi-section-toggle-menu');
+      if (!menu) return;
+      var btn = document.getElementById('kpi-main-options-btn') || (e ? (e.currentTarget || e.target) : null);
+      var isHidden = (menu.style.display === 'none' || !menu.style.display);
+      if (isHidden) {
+        menu.style.display = 'block';
+        menu.style.zIndex = '99999';
+        if (btn) {
+          var rect = btn.getBoundingClientRect();
+          menu.style.position = 'fixed';
+          menu.style.top = (rect.bottom + 6) + 'px';
+          menu.style.left = Math.max(10, rect.right - 190) + 'px';
+        }
+      } else {
+        menu.style.display = 'none';
+      }
+    };
+
+    document.addEventListener('click', function(e) {
+      var menu = document.getElementById('kpi-section-toggle-menu');
+      if (menu && menu.style.display === 'block') {
+        if (!e.target.closest('#kpi-section-toggle-menu') && !e.target.closest('button[title*="Options"]')) {
+          menu.style.display = 'none';
+        }
+      }
+    });
+
+    window.toggleKPIPanelSection = function(secId, show) {
+      var el = document.getElementById(secId);
+      if (el) el.style.display = show ? '' : 'none';
+    };
+
+    window.exportKPIDataCSV = function() {
+      if (!_currentKPIData || !_currentKPIData.data_table) {
+        alert('No data available to export.');
+        return;
+      }
+      var rows = _currentKPIData.data_table;
+      var csv = 'Period,Actual,Target,Gap,YTD,Contribution\n';
+      rows.forEach(function(r) {
+        csv += '"' + (r.period||'') + '","' + (r.actual_fmt||r.actual||'') + '","' + (r.target_fmt||r.target||'') + '","' + (r.gap_fmt||r.gap||'') + '","' + (r.ytd||'') + '","' + (r.contribution||'') + '"\n';
+      });
+      var blob = new Blob([csv], { type: 'text/csv' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'KPI_Period_Matrix_' + (_currentKPIData.kpi_id || 'SKL-K01') + '.csv';
+      a.click();
+    };
+
+    function renderKPIDataTable(rows) {
+      var tbody = document.getElementById('kpi-detail-data-table-body');
+      if (!tbody) return;
+      if (!rows || rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3,#64748b);">No period data found</td></tr>';
+        return;
+      }
+      var html = '';
+      rows.forEach(function(r) {
+        var gapVal = typeof r.gap === 'number' ? r.gap : 0;
+        var gapColor = gapVal < 0 ? '#ef4444' : (gapVal > 0 ? '#10b981' : 'var(--text2,#64748b)');
+        var actFmt = r.actual_fmt || (typeof r.actual === 'number' ? r.actual.toLocaleString() : '0');
+        var tarFmt = r.target_fmt || (typeof r.target === 'number' ? r.target.toLocaleString() : '0');
+        var gapFmt = r.gap_fmt || (typeof gapVal === 'number' ? (gapVal > 0 ? '+' : '') + gapVal.toLocaleString() : '0');
+        var ytdFmt = r.ytd_fmt || (typeof r.ytd === 'number' ? (r.ytd > 100 ? r.ytd.toLocaleString() : (r.ytd > 0 ? r.ytd + '%' : '0')) : (r.ytd || '0'));
+        html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);background:transparent;">' +
+          '<td style="padding:12px 14px;font-weight:700;color:#f8fafc;font-family:\'DM Mono\',monospace;">' + (r.period || 'Period') + '</td>' +
+          '<td style="padding:12px 14px;text-align:right;font-weight:700;color:#f8fafc;font-family:\'DM Mono\',monospace;">' + actFmt + '</td>' +
+          '<td style="padding:12px 14px;text-align:right;font-weight:600;color:#94a3b8;font-family:\'DM Mono\',monospace;">' + tarFmt + '</td>' +
+          '<td style="padding:12px 14px;text-align:right;font-weight:700;color:' + gapColor + ';font-family:\'DM Mono\',monospace;">' + gapFmt + '</td>' +
+          '<td style="padding:12px 14px;text-align:right;color:#cbd5e1;font-family:\'DM Mono\',monospace;">' + ytdFmt + '</td>' +
+          '<td style="padding:12px 14px;text-align:right;color:#cbd5e1;font-family:\'DM Mono\',monospace;">' + (r.contribution || '0') + '</td>' +
+        '</tr>';
+      });
+      tbody.innerHTML = html;
+    }
+
+    function renderKPIChart(chartData) {
+      var cvs = document.getElementById('kpiDetailChartCanvas');
+      if (!cvs) return;
+      var ctx = cvs.getContext('2d');
+      var labels = chartData.labels || ['AUG 2026', 'SEP 2026', 'OCT 2026', 'NOV 2026', 'DEC 2026', 'JAN 2027', 'FEB 2027', 'MAR 2027'];
+      var actuals = chartData.actual_series || [1731258000, 0, 1754035000, 0, 2034203000, 0, 0, 0];
+      var targets = chartData.target_series || [2000000000, 0, 2000000000, 0, 2000000000, 0, 0, 0];
+
+      if (_currentKPIChart) {
+        try { _currentKPIChart.destroy(); } catch (e) {}
+      }
+
+      if (typeof Chart !== 'undefined') {
+        var chartType = (_currentKPIChartType === 'area' || _currentKPIChartType === 'line') ? 'line' : 'bar';
+        var isArea = _currentKPIChartType === 'area';
+        var isLine = _currentKPIChartType === 'line';
+
+        _currentKPIChart = new Chart(ctx, {
+          type: chartType,
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: 'Actual',
+                data: actuals,
+                borderColor: '#0091ff',
+                backgroundColor: isArea ? 'rgba(0,145,255,0.2)' : (isLine ? 'transparent' : '#0091ff'),
+                borderWidth: 2,
+                tension: 0.3,
+                fill: isArea,
+              },
+              {
+                label: 'Target',
+                data: targets,
+                borderColor: '#00e676',
+                backgroundColor: isArea ? 'rgba(0,230,118,0.2)' : (isLine ? 'transparent' : '#00e676'),
+                borderWidth: 2,
+                tension: 0.3,
+                fill: isArea,
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                titleColor: '#ffffff',
+                bodyColor: '#e2e8f0',
+                borderColor: 'rgba(255, 255, 255, 0.15)',
+                borderWidth: 1,
+                cornerRadius: 8,
+                padding: 10,
+              }
+            },
+            scales: {
+              x: { grid: { color: 'rgba(255, 255, 255, 0.06)' }, ticks: { color: '#94a3b8' } },
+              y: { grid: { color: 'rgba(255, 255, 255, 0.06)' }, ticks: { color: '#94a3b8' } }
+            }
+          }
+        });
+      }
+    }
+
+    window.toggleKPIChartType = function(type) {
+      _currentKPIChartType = type;
+      if (_currentKPIData) renderKPIChart(_currentKPIData.chart || {});
+    };
+
+    window._kpiZoomStep = 0;
+    window._kpiPanActive = false;
+
+    window.zoomKPIChartStep = function(action) {
+      if (!_currentKPIChart) return;
+      var labels = (_currentKPIData && _currentKPIData.chart && _currentKPIData.chart.labels) ? _currentKPIData.chart.labels : (_currentKPIChart.data.labels || []);
+      if (labels.length <= 2) return;
+
+      var total = labels.length;
+      if (action === 'in') {
+        window._kpiZoomStep = Math.min(window._kpiZoomStep + 1, Math.floor(total / 2) - 1);
+      } else if (action === 'out') {
+        window._kpiZoomStep = Math.max(0, window._kpiZoomStep - 1);
+      } else if (action === 'reset') {
+        window._kpiZoomStep = 0;
+      }
+
+      var startIdx = window._kpiZoomStep;
+      var endIdx = total - 1 - window._kpiZoomStep;
+      if (startIdx >= endIdx) { startIdx = 0; endIdx = total - 1; }
+
+      if (_currentKPIChart.options.scales && _currentKPIChart.options.scales.x) {
+        _currentKPIChart.options.scales.x.min = labels[startIdx];
+        _currentKPIChart.options.scales.x.max = labels[endIdx];
+        _currentKPIChart.update('active');
+      }
+    };
+
+    window.toggleKPIPanTool = function() {
+      window._kpiPanActive = !window._kpiPanActive;
+      var btn = document.getElementById('kpi-pan-btn');
+      if (btn) {
+        if (window._kpiPanActive) {
+          btn.style.background = '#0091ff';
+          btn.style.borderColor = '#0091ff';
+          btn.style.color = '#ffffff';
+        } else {
+          btn.style.background = '';
+          btn.style.borderColor = '';
+          btn.style.color = '';
+        }
+      }
+    };
+
+    window.filterKPIDataByPeriod = function(periodVal) {
+      if (!_currentKPIData) return;
+
+      // Filter Matrix Rows
+      var tbody = document.getElementById('kpi-detail-matrix-tbody');
+      if (tbody) {
+        var rows = tbody.querySelectorAll('tr');
+        rows.forEach(function(tr) {
+          var periodCell = tr.cells[0] ? tr.cells[0].textContent.trim() : '';
+          if (periodVal === 'ALL' || periodCell.includes(periodVal)) {
+            tr.style.display = '';
+          } else {
+            tr.style.display = 'none';
+          }
+        });
+      }
+
+      // Filter Chart Data
+      if (_currentKPIChart && _currentKPIData.chart) {
+        var origLabels = _currentKPIData.chart.labels || [];
+        var origActuals = _currentKPIData.chart.actual_series || [];
+        var origTargets = _currentKPIData.chart.target_series || [];
+
+        if (periodVal === 'ALL') {
+          _currentKPIChart.data.labels = origLabels;
+          _currentKPIChart.data.datasets[0].data = origActuals;
+          _currentKPIChart.data.datasets[1].data = origTargets;
+        } else {
+          var filteredLabels = [];
+          var filteredActuals = [];
+          var filteredTargets = [];
+
+          origLabels.forEach(function(lbl, idx) {
+            if (lbl.includes(periodVal)) {
+              filteredLabels.push(lbl);
+              filteredActuals.push(origActuals[idx]);
+              filteredTargets.push(origTargets[idx]);
+            }
+          });
+
+          _currentKPIChart.data.labels = filteredLabels.length ? filteredLabels : origLabels;
+          _currentKPIChart.data.datasets[0].data = filteredLabels.length ? filteredActuals : origActuals;
+          _currentKPIChart.data.datasets[1].data = filteredLabels.length ? filteredTargets : origTargets;
+        }
+        _currentKPIChart.update('active');
+      }
+    };
+
+    window.toggleKPIChartFullscreen = function() {
+      var modal = document.getElementById('kpi-chart-fullscreen-modal');
+      if (!modal) return;
+      var isHidden = (modal.style.display === 'none' || !modal.style.display);
+      if (isHidden) {
+        modal.style.display = 'flex';
+        var fsCvs = document.getElementById('kpiFsChartCanvas');
+        if (fsCvs && _currentKPIChart) {
+          if (window._fsKPIChart) try { window._fsKPIChart.destroy(); } catch(e){}
+          window._fsKPIChart = new Chart(fsCvs.getContext('2d'), {
+            type: _currentKPIChart.config.type,
+            data: _currentKPIChart.data,
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: true, labels: { color: '#fff' } } },
+              scales: {
+                x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#cbd5e1' } },
+                y: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#cbd5e1' } }
+              }
+            }
+          });
+        }
+      } else {
+        modal.style.display = 'none';
+      }
+    };
+
+    window.toggleKPIChartExportMenu = function(e) {
+      if (e) e.stopPropagation();
+      var menu = document.getElementById('kpi-chart-export-menu');
+      if (menu) menu.style.display = (menu.style.display === 'none' || !menu.style.display) ? 'block' : 'none';
+    };
+
+    window.exportKPIChartPNG = function() {
+      if (!_currentKPIChart) return;
+      var menu = document.getElementById('kpi-chart-export-menu');
+      if (menu) menu.style.display = 'none';
+      var link = document.createElement('a');
+      link.download = 'KPI_Chart_' + (new Date().toISOString().slice(0,10)) + '.png';
+      link.href = _currentKPIChart.toBase64Image();
+      link.click();
+    };
+
+    document.addEventListener('click', function() {
+      var menu = document.getElementById('kpi-chart-export-menu');
+      if (menu) menu.style.display = 'none';
+    });
+
+    window.addKPIComment = function(inputEl) {
+      if (!inputEl || !inputEl.value.trim()) return;
+      var text = inputEl.value.trim();
+      var container = document.getElementById('kpi-detail-comments-list');
+      if (container) {
+        if (container.textContent.includes('No comments yet')) container.innerHTML = '';
+        var timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        var cItem = document.createElement('div');
+        cItem.style.cssText = 'padding:8px 12px;margin-bottom:6px;border-radius:8px;background:var(--surface2,rgba(0,145,255,0.04));border:1px solid var(--border,#e2e8f0);font-size:11px;';
+        cItem.innerHTML = '<div style="display:flex;justify-content:space-between;color:#0091ff;font-weight:700;margin-bottom:2px;"><span>Admin</span><span style="color:var(--text3,#64748b);font-weight:400;font-size:9px;">' + timeStr + '</span></div><div style="color:var(--text,#0f172a);font-weight:600;">' + text.replace(/</g, "&lt;").replace(/>/g, "&gt;") + '</div>';
+        container.appendChild(cItem);
+      }
+      inputEl.value = '';
+    };
+
+    function renderKPIDataDrill(drillData) {
+      var thead = document.getElementById('kpi-detail-drill-thead');
+      var tbody = document.getElementById('kpi-detail-drill-tbody');
+      if (!thead || !tbody) return;
+
+      var periods = drillData.periods || ['Q1 2026'];
+      var rows = drillData.rows || [];
+
+      function getPeriodStyle(pStr, idx) {
+        if (String(pStr).includes('2025')) return { main: 'background:linear-gradient(135deg, #6366f1, #4f46e5);color:#fff;border:1px solid #4338ca;', sub: 'background:#818cf8;color:#fff;border:1px solid #6366f1;' };
+        if (String(pStr).includes('2026')) return { main: 'background:linear-gradient(135deg, #0091ff, #0060df);color:#fff;border:1px solid #0284c7;', sub: 'background:#38bdf8;color:#fff;border:1px solid #0091ff;' };
+        if (String(pStr).includes('2027')) return { main: 'background:linear-gradient(135deg, #10b981, #059669);color:#fff;border:1px solid #047857;', sub: 'background:#34d399;color:#fff;border:1px solid #10b981;' };
+        var fallbacks = [
+          { main: 'background:linear-gradient(135deg, #0091ff, #0060df);color:#fff;border:1px solid #0284c7;', sub: 'background:#38bdf8;color:#fff;border:1px solid #0091ff;' },
+          { main: 'background:linear-gradient(135deg, #a855f7, #7e22ce);color:#fff;border:1px solid #6b21a8;', sub: 'background:#c084fc;color:#fff;border:1px solid #a855f7;' },
+          { main: 'background:linear-gradient(135deg, #f59e0b, #d97706);color:#fff;border:1px solid #b45309;', sub: 'background:#fbbf24;color:#fff;border:1px solid #f59e0b;' }
+        ];
+        return fallbacks[idx % fallbacks.length];
+      }
+
+      // Row 1: Period Header Groups
+      var th1 = '<tr style="font-size:10px;text-transform:uppercase;font-weight:800;">' +
+        '<th style="padding:10px 14px;text-align:left;background:#1890ff;color:#fff;border:1px solid rgba(255,255,255,0.2);width:220px;">ORGANIZATION / UNIT</th>';
+
+      periods.forEach(function(p, i) {
+        var st = getPeriodStyle(p, i);
+        th1 += '<th colspan="4" style="padding:10px;text-align:center;font-weight:800;letter-spacing:0.04em;' + st.main + '">' + p + '</th>';
+      });
+      th1 += '</tr>';
+
+      // Row 2: Sub-Columns (ACTUAL, TARGET, GAP, CONTRIBUTION)
+      var th2 = '<tr style="font-size:9px;text-transform:uppercase;font-weight:800;">' +
+        '<th style="background:#1890ff;color:#fff;border:1px solid rgba(255,255,255,0.2);"></th>';
+      periods.forEach(function(p, i) {
+        var st = getPeriodStyle(p, i);
+        th2 += '<th style="padding:8px;text-align:right;font-weight:800;' + st.sub + '">ACTUAL</th>' +
+          '<th style="padding:8px;text-align:right;font-weight:800;' + st.sub + '">TARGET</th>' +
+          '<th style="padding:8px;text-align:right;font-weight:800;' + st.sub + '">GAP</th>' +
+          '<th style="padding:8px;text-align:right;font-weight:800;' + st.sub + '">CONTRIBUTION</th>';
+      });
+      th2 += '</tr>';
+      thead.innerHTML = th1 + th2;
+
+      // Body Rows (Clean glass grid borders, crisp white unit name)
+      if (!rows || rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="' + (1 + periods.length * 4) + '" style="text-align:center;padding:20px;color:#94a3b8;">No sub-unit breakdown data available</td></tr>';
+        return;
+      }
+      var bHtml = '';
+      rows.forEach(function(r) {
+        bHtml += '<tr style="background:transparent;">' +
+          '<td style="padding:10px 14px;font-weight:700;color:#f8fafc;border:1px solid rgba(255,255,255,0.06);">' + (r.name || 'Board of Directors') + '</td>';
+        periods.forEach(function(p) {
+          var pData = (r.periods && r.periods[p]) || { actual: '0%', target: '0%', gap: '0%', contribution: '0.0' };
+          bHtml += '<td style="padding:10px;text-align:right;font-family:\'DM Mono\',monospace;font-weight:700;color:#f8fafc;border:1px solid rgba(255,255,255,0.06);">' + pData.actual + '</td>' +
+            '<td style="padding:10px;text-align:right;font-family:\'DM Mono\',monospace;color:#94a3b8;border:1px solid rgba(255,255,255,0.06);">' + pData.target + '</td>' +
+            '<td style="padding:10px;text-align:right;font-family:\'DM Mono\',monospace;font-weight:700;color:' + (String(pData.gap).includes('-') ? '#ef4444' : '#10b981') + ';border:1px solid rgba(255,255,255,0.06);">' + pData.gap + '</td>' +
+            '<td style="padding:10px;text-align:right;font-family:\'DM Mono\',monospace;color:#cbd5e1;border:1px solid rgba(255,255,255,0.06);">' + pData.contribution + '</td>';
+        });
+        bHtml += '</tr>';
+      });
+      tbody.innerHTML = bHtml;
+    }
+
+    function syncScorecardSelect() {
+      var sel = document.getElementById('sc-scorecard-select');
+      if (!sel) return;
+      var want = String(window._activeScorecardId || 0);
+      if (sel.value !== want) {
+        sel.value = want;
+        if (sel.selectedIndex < 0) sel.value = '0';
+      }
+    }
+
+    async function populateScorecardSelector() {
+      var sel = document.getElementById('sc-scorecard-select');
+      if (!sel) return false;
+      try {
+        const resp = await (window.authFetch || fetch)((window.BACKEND || '') + '/scorecards/list', { cache: 'no-store' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        var items = (data && Array.isArray(data.scorecards)) ? data.scorecards : [];
+        var html = '';
+        items.forEach(function(s) {
+          var sid = parseInt(s.id, 10) || 0;
+          if (sid <= 0) return;
+          var nm = String(s.name || ('Scorecard #' + sid)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+          html += '<option value="' + sid + '">' + nm + '</option>';
+        });
+        if (!html) {
+          html = '<option value="0">SKL Group Scorecard</option>';
+        }
+        sel.innerHTML = html;
+        if (!window._activeScorecardId && items.length > 0) {
+          window._activeScorecardId = parseInt(items[0].id, 10) || 0;
+        }
+        sel.value = String(window._activeScorecardId || (items[0] ? items[0].id : 0));
+        if (sel.selectedIndex < 0 && sel.options.length > 0) sel.selectedIndex = 0;
+        return true;
+      } catch (e) {
+        console.warn('Scorecard list load failed', e);
+        return false;
+      }
+    }
+
+    window.onScorecardSelect = function(v) {
+      var id = parseInt(v, 10) || 0;
+      window._activeScorecardId = id;
+      window._balancedScorecardData = null;
+      currentTab = 'all';
+      currentStatusFilter = 'all';
+      currentSearchQuery = '';
+      var dc = document.getElementById('scorecardDetailContainer');
+      var og = document.getElementById('scorecardGrid');
+      if (dc) dc.style.display = 'none';
+      if (og) {
+        og.style.display = 'grid';
+        og.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text3);">Loading scorecard…</div>';
+      }
+      loadScorecards();
+    };
+
+    window.onScorecardYearSelect = function(yr) {
+      window.currentScorecardYear = yr;
+      window._balancedScorecardData = null;
+      var dc = document.getElementById('scorecardDetailContainer');
+      var og = document.getElementById('scorecardGrid');
+      if (dc) dc.style.display = 'none';
+      if (og) {
+        og.style.display = 'grid';
+        og.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text3);">Loading scorecard metrics for ' + yr + '…</div>';
+      }
+      loadScorecards();
+    };
+
+    /* ═══════════════════════════════════════════════════════════════
+       GLOBAL PERIOD & DATE RANGE FILTER CONTROLLER (4-Mode Engine)
+       ═══════════════════════════════════════════════════════════════ */
+    /* ═══════════════════════════════════════════════════════════════
+       GLOBAL PERIOD & DATE RANGE FILTER CONTROLLER (Bulletproof Math)
+       ═══════════════════════════════════════════════════════════════ */
+    /* ═══════════════════════════════════════════════════════════════
+       GLOBAL PERIOD & DATE RANGE FILTER CONTROLLER (Non-Destructive Projection Engine)
+       ═══════════════════════════════════════════════════════════════ */
+    window.gperiodState = {
+      mode: 'month',
+      startYear: 2026,
+      startSub: 'Apr',
+      endYear: 2026,
+      endSub: 'Mar',
+      fyType: 'apr-mar',
+      startDate: '04/01/2026',
+      endDate: '03/31/2027'
+    };
+
+    // Rule 2: Financial-Year Agnostic Engine (getFYConfig)
+    window.getFYConfig = function(fyType) {
+      fyType = fyType || window.gperiodState.fyType || 'apr-mar';
+      var startM = 4; // default apr-mar
+      if (fyType === 'jan-dec') startM = 1;
+      else if (fyType === 'jul-jun') startM = 7;
+      else if (fyType === 'oct-sep') startM = 10;
+
+      var monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      var orderedMonths = [];
+      for (var i = 0; i < 12; i++) {
+        var mIdx = (startM - 1 + i) % 12;
+        orderedMonths.push(monthNames[mIdx]);
+      }
+
+      var monthMap = {};
+      orderedMonths.forEach(function(mName) {
+        var mNum = monthNames.indexOf(mName) + 1;
+        monthMap[mName] = {
+          monthNum: mNum,
+          isNextYear: mNum < startM
+        };
+      });
+
+      var quarters = [];
+      for (var q = 0; q < 4; q++) {
+        var qId = 'Q' + (q + 1);
+        var qMonthsArr = [orderedMonths[q * 3], orderedMonths[q * 3 + 1], orderedMonths[q * 3 + 2]];
+        var sMNum = monthNames.indexOf(qMonthsArr[0]) + 1;
+        var eMNum = monthNames.indexOf(qMonthsArr[2]) + 1;
+        quarters.push({
+          id: qId,
+          title: qId,
+          months: qMonthsArr.join(', '),
+          startMonthNum: sMNum,
+          endMonthNum: eMNum,
+          startIsNextYear: sMNum < startM,
+          endIsNextYear: eMNum < startM
+        });
+      }
+
+      var halves = [
+        {
+          id: 'H1',
+          title: 'H1',
+          months: orderedMonths.slice(0, 6).join(','),
+          startMonthNum: monthNames.indexOf(orderedMonths[0]) + 1,
+          endMonthNum: monthNames.indexOf(orderedMonths[5]) + 1,
+          startIsNextYear: (monthNames.indexOf(orderedMonths[0]) + 1) < startM,
+          endIsNextYear: (monthNames.indexOf(orderedMonths[5]) + 1) < startM
+        },
+        {
+          id: 'H2',
+          title: 'H2',
+          months: orderedMonths.slice(6, 12).join(','),
+          startMonthNum: monthNames.indexOf(orderedMonths[6]) + 1,
+          endMonthNum: monthNames.indexOf(orderedMonths[11]) + 1,
+          startIsNextYear: (monthNames.indexOf(orderedMonths[6]) + 1) < startM,
+          endIsNextYear: (monthNames.indexOf(orderedMonths[11]) + 1) < startM
+        }
+      ];
+
+      return {
+        startMonthNum: startM,
+        months: orderedMonths,
+        monthMap: monthMap,
+        quarters: quarters,
+        halves: halves
+      };
+    };
+
+    // Rule 1: Zero Hardcoded Days (Native JS Date Math)
+    function getLastDayOfMonth(year, month1Based) {
+      return new Date(year, month1Based, 0).getDate();
+    }
+
+    function formatDateMMDDYYYY(monthNum, dayNum, year) {
+      var mm = monthNum < 10 ? '0' + monthNum : '' + monthNum;
+      var dd = dayNum < 10 ? '0' + dayNum : '' + dayNum;
+      return mm + '/' + dd + '/' + year;
+    }
+
+    window.updateFiscalYearType = function(val) {
+      window.gperiodState.fyType = val || 'apr-mar';
+      updatePeriodDateInputs();
+      projectActiveDatesToUI();
+      renderGlobalPeriodSubGrids();
+    };
+
+    // Rule 3: The 9-Year Matrix Rendering (Carousel Engine)
+    window.populateGlobalPeriodYearOptions = function(activeStartYear, activeEndYear) {
+      var startYrSel = document.getElementById('gperiod-start-year');
+      var endYrSel = document.getElementById('gperiod-end-year');
+      if (!startYrSel || !endYrSel) return;
+
+      var sYr = activeStartYear !== undefined ? activeStartYear : (window.gperiodState.startYear || 2026);
+      var eYr = activeEndYear !== undefined ? activeEndYear : (window.gperiodState.endYear || sYr);
+
+      if (window.gperiodState.mode === 'year') {
+        var labelSpan = sYr + ' - ' + (sYr + 8);
+        var sHtml = '<option value="' + sYr + '" selected>' + labelSpan + '</option>';
+        var eHtml = '<option value="' + eYr + '" selected>' + labelSpan + '</option>';
+        startYrSel.innerHTML = sHtml;
+        endYrSel.innerHTML = eHtml;
+        startYrSel.value = String(sYr);
+        endYrSel.value = String(eYr);
+        return;
+      }
+
+      var minYr = Math.min(1990, sYr - 10, eYr - 10);
+      var maxYr = Math.max(2050, sYr + 10, eYr + 10);
+
+      var sHtml = '';
+      var eHtml = '';
+      for (var y = minYr; y <= maxYr; y++) {
+        var label = y + ' - ' + (y + 1);
+        sHtml += '<option value="' + y + '"' + (y === sYr ? ' selected' : '') + '>' + label + '</option>';
+        eHtml += '<option value="' + y + '"' + (y === eYr ? ' selected' : '') + '>' + label + '</option>';
+      }
+
+      startYrSel.innerHTML = sHtml;
+      endYrSel.innerHTML = eHtml;
+      startYrSel.value = String(sYr);
+      endYrSel.value = String(eYr);
+    };
+
+    window.toggleGlobalPeriodPicker = function(forceState) {
+      var pop = document.getElementById('global-period-popover');
+      if (!pop) return;
+      var show = forceState !== undefined ? forceState : !pop.classList.contains('show');
+      if (show) {
+        populateGlobalPeriodYearOptions();
+        projectActiveDatesToUI();
+        pop.classList.add('show');
+        renderGlobalPeriodSubGrids();
+      } else {
+        pop.classList.remove('show');
+      }
+    };
+
+    // Rule 4: Non-Destructive Projection Engine
+    window.projectActiveDatesToUI = function() {
+      var config = getFYConfig(window.gperiodState.fyType);
+      var mode = window.gperiodState.mode;
+
+      var partsS = (window.gperiodState.startDate || '').split('/');
+      var partsE = (window.gperiodState.endDate || '').split('/');
+
+      if (partsS.length === 3 && partsE.length === 3) {
+        var sM = parseInt(partsS[0], 10);
+        var eM = parseInt(partsE[0], 10);
+        var sY = parseInt(partsS[2], 10);
+        var eY = parseInt(partsE[2], 10);
+
+        if (mode === 'month') {
+          var monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          window.gperiodState.startSub = monthNames[sM - 1];
+          window.gperiodState.endSub = monthNames[eM - 1];
+        } else if (mode === 'quarter') {
+          var qS = config.quarters.find(function(q){ return sM >= q.startMonthNum && sM <= q.endMonthNum; }) || config.quarters[0];
+          var qE = config.quarters.find(function(q){ return eM >= q.startMonthNum && eM <= q.endMonthNum; }) || config.quarters[3];
+          window.gperiodState.startSub = qS.id;
+          window.gperiodState.endSub = qE.id;
+        } else if (mode === 'half') {
+          var hS = config.halves.find(function(h){ return sM >= h.startMonthNum && sM <= h.endMonthNum; }) || config.halves[0];
+          var hE = config.halves.find(function(h){ return eM >= h.startMonthNum && eM <= h.endMonthNum; }) || config.halves[1];
+          window.gperiodState.startSub = hS.id;
+          window.gperiodState.endSub = hE.id;
+        } else if (mode === 'year') {
+          var fyStartYear = (sM < config.startMonthNum) ? sY - 1 : sY;
+          var fyEndYear = (eM < config.startMonthNum) ? eY - 1 : eY;
+          window.gperiodState.startSub = fyStartYear + '-' + (fyStartYear + 1);
+          window.gperiodState.endSub = fyEndYear + '-' + (fyEndYear + 1);
+        }
+      }
+    };
+
+    window.renderGlobalPeriodSubGrids = function() {
+      var sContainer = document.getElementById('gperiod-start-months');
+      var eContainer = document.getElementById('gperiod-end-months');
+      if (!sContainer || !eContainer) return;
+
+      var config = getFYConfig(window.gperiodState.fyType);
+      var mode = window.gperiodState.mode;
+      var sHtml = '';
+      var eHtml = '';
+
+      var monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+      // Parse active Start Date timestamp for Chronological Validation
+      var partsS = (window.gperiodState.startDate || '').split('/');
+      var sMNum = parseInt(partsS[0], 10) || config.startMonthNum;
+      var sYrVal = parseInt(partsS[2], 10) || window.gperiodState.startYear;
+      var startTimestamp = new Date(sYrVal, sMNum - 1, 1).getTime();
+
+      var sYear = parseInt(window.gperiodState.startYear, 10) || 2026;
+      var eYear = parseInt(window.gperiodState.endYear, 10) || sYear;
+
+      if (mode === 'month') {
+        sContainer.className = 'gperiod-month-grid';
+        eContainer.className = 'gperiod-month-grid';
+
+        config.months.forEach(function(m) {
+          var sActive = m === window.gperiodState.startSub ? ' active' : '';
+          sHtml += '<button type="button" class="gperiod-month-item' + sActive + '" onclick="selectSubPeriod(\'start\',\'' + m + '\',event)">' + m + '</button>';
+
+          // Chronological End Month Validation
+          var emNum = monthNames.indexOf(m) + 1;
+          var calEndYear = emNum < config.startMonthNum ? eYear + 1 : eYear;
+          var itemTs = new Date(calEndYear, emNum - 1, 1).getTime();
+          var isDisabled = (eYear < sYear) || (eYear === sYear && itemTs < startTimestamp);
+
+          var eActive = m === window.gperiodState.endSub ? ' active' : '';
+          var disClass = isDisabled ? ' disabled' : '';
+          var disAttr = isDisabled ? ' disabled style="pointer-events:none;opacity:0.35;cursor:not-allowed;background:var(--surface2,#f1f5f9);color:var(--text3,#94a3b8);"' : '';
+
+          eHtml += '<button type="button" class="gperiod-month-item' + eActive + disClass + '"' + disAttr + ' onclick="selectSubPeriod(\'end\',\'' + m + '\',event)">' + m + '</button>';
+        });
+      } else if (mode === 'quarter') {
+        sContainer.className = 'gperiod-sub-grid quarter-mode';
+        eContainer.className = 'gperiod-sub-grid quarter-mode';
+
+        config.quarters.forEach(function(q) {
+          var sActive = q.id === window.gperiodState.startSub ? ' active' : '';
+          sHtml += '<button type="button" class="gperiod-card-quarter' + sActive + '" onclick="selectSubPeriod(\'start\',\'' + q.id + '\',event)"><div class="sub-title">' + q.title + '</div><div class="sub-months">' + q.months + '</div></button>';
+
+          // Chronological End Quarter Validation
+          var qEndYear = q.endIsNextYear ? eYear + 1 : eYear;
+          var qEndTs = new Date(qEndYear, q.endMonthNum - 1, getLastDayOfMonth(qEndYear, q.endMonthNum)).getTime();
+          var isDisabled = (eYear < sYear) || (qEndTs < startTimestamp);
+
+          var eActive = q.id === window.gperiodState.endSub ? ' active' : '';
+          var disClass = isDisabled ? ' disabled' : '';
+          var disAttr = isDisabled ? ' disabled style="pointer-events:none;opacity:0.35;cursor:not-allowed;background:var(--surface2,#f1f5f9);color:var(--text3,#94a3b8);"' : '';
+
+          eHtml += '<button type="button" class="gperiod-card-quarter' + eActive + disClass + '"' + disAttr + ' onclick="selectSubPeriod(\'end\',\'' + q.id + '\',event)"><div class="sub-title">' + q.title + '</div><div class="sub-months">' + q.months + '</div></button>';
+        });
+      } else if (mode === 'half') {
+        sContainer.className = 'gperiod-sub-grid half-mode';
+        eContainer.className = 'gperiod-sub-grid half-mode';
+
+        config.halves.forEach(function(h) {
+          var sActive = h.id === window.gperiodState.startSub ? ' active' : '';
+          sHtml += '<button type="button" class="gperiod-card-half' + sActive + '" onclick="selectSubPeriod(\'start\',\'' + h.id + '\',event)"><div class="sub-title">' + h.title + '</div><div class="sub-months">' + h.months + '</div></button>';
+
+          // Chronological End Half Validation
+          var hEndYear = h.endIsNextYear ? eYear + 1 : eYear;
+          var hEndTs = new Date(hEndYear, h.endMonthNum - 1, getLastDayOfMonth(hEndYear, h.endMonthNum)).getTime();
+          var isDisabled = (eYear < sYear) || (hEndTs < startTimestamp);
+
+          var eActive = h.id === window.gperiodState.endSub ? ' active' : '';
+          var disClass = isDisabled ? ' disabled' : '';
+          var disAttr = isDisabled ? ' disabled style="pointer-events:none;opacity:0.35;cursor:not-allowed;background:var(--surface2,#f1f5f9);color:var(--text3,#94a3b8);"' : '';
+
+          eHtml += '<button type="button" class="gperiod-card-half' + eActive + disClass + '"' + disAttr + ' onclick="selectSubPeriod(\'end\',\'' + h.id + '\',event)"><div class="sub-title">' + h.title + '</div><div class="sub-months">' + h.months + '</div></button>';
+        });
+      } else if (mode === 'year') {
+        sContainer.className = 'gperiod-sub-grid year-mode';
+        eContainer.className = 'gperiod-sub-grid year-mode';
+
+        // 9-Year Matrix Base Anchor
+        var sYear = parseInt(window.gperiodState.startYear, 10) || 2026;
+        var eYear = parseInt(window.gperiodState.endYear, 10) || sYear;
+        var baseYr = Math.min(2026, sYear);
+
+        for (var i = 0; i < 9; i++) {
+          var yVal = baseYr + i;
+          var yCode = yVal % 100;
+          var yNext = (yVal + 1) % 100;
+          var cardId = yVal + '-' + (yVal + 1);
+          var cardLabel = (yCode < 10 ? '0' + yCode : yCode) + '-' + (yNext < 10 ? '0' + yNext : yNext);
+
+          var sActive = cardId === window.gperiodState.startSub || yVal === sYear ? ' active' : '';
+          sHtml += '<button type="button" class="gperiod-card-year' + sActive + '" onclick="selectYearCard(\'start\',' + yVal + ',\'' + cardId + '\',event)">' + cardLabel + '</button>';
+
+          // Chronological End Year Min-Date Validation (isBefore activeStartDate)
+          var cardStartTs = new Date(yVal, config.startMonthNum - 1, 1).getTime();
+          var isDisabled = (yVal < sYear) || (cardStartTs < startTimestamp);
+
+          var eActive = cardId === window.gperiodState.endSub || yVal === eYear ? ' active' : '';
+          var disClass = isDisabled ? ' disabled' : '';
+          var disAttr = isDisabled ? ' disabled style="pointer-events:none;opacity:0.35;cursor:not-allowed;background:var(--surface2,#f1f5f9);color:var(--text3,#94a3b8);"' : '';
+
+          eHtml += '<button type="button" class="gperiod-card-year' + eActive + disClass + '"' + disAttr + ' onclick="selectYearCard(\'end\',' + yVal + ',\'' + cardId + '\',event)">' + cardLabel + '</button>';
+        }
+      }
+
+      sContainer.innerHTML = sHtml;
+      eContainer.innerHTML = eHtml;
+    };
+
+    window.selectSubPeriod = function(target, itemVal, evt) {
+      if (evt) evt.stopPropagation();
+      if (target === 'start') {
+        window.gperiodState.startSub = itemVal;
+      } else {
+        window.gperiodState.endSub = itemVal;
+      }
+
+      updatePeriodDateInputs();
+
+      // Enforce Chronological Lock (Auto-advance End Date if it precedes Start Date)
+      var partsS = (window.gperiodState.startDate || '').split('/');
+      var partsE = (window.gperiodState.endDate || '').split('/');
+      if (partsS.length === 3 && partsE.length === 3) {
+        var startTs = new Date(partsS[2], partsS[0] - 1, 1).getTime();
+        var endTs = new Date(partsE[2], partsE[0] - 1, 1).getTime();
+        if (endTs < startTs) {
+          window.gperiodState.endSub = window.gperiodState.startSub;
+          window.gperiodState.endYear = window.gperiodState.startYear;
+          updatePeriodDateInputs();
+        }
+      }
+
+      renderGlobalPeriodSubGrids();
+    };
+
+    window.selectYearCard = function(target, yearVal, cardId, evt) {
+      if (evt) evt.stopPropagation();
+      if (target === 'start') {
+        window.gperiodState.startYear = yearVal;
+        window.gperiodState.startSub = cardId;
+        if (window.gperiodState.endYear < yearVal) {
+          window.gperiodState.endYear = yearVal;
+          window.gperiodState.endSub = cardId;
+        }
+      } else {
+        var sYr = parseInt(window.gperiodState.startYear, 10) || 2026;
+        if (yearVal < sYr) {
+          // Block click if End Year chronologically precedes Start Year
+          return;
+        }
+        window.gperiodState.endYear = yearVal;
+        window.gperiodState.endSub = cardId;
+      }
+      populateGlobalPeriodYearOptions(window.gperiodState.startYear, window.gperiodState.endYear);
+      updatePeriodDateInputs();
+      renderGlobalPeriodSubGrids();
+    };
+
+    // Dynamic Start & End Input Calculator
+    window.updatePeriodDateInputs = function() {
+      var mode = window.gperiodState.mode;
+      var config = getFYConfig(window.gperiodState.fyType);
+      var sYear = parseInt(window.gperiodState.startYear, 10) || 2026;
+      var eYear = parseInt(window.gperiodState.endYear, 10) || sYear;
+      var sSub = window.gperiodState.startSub;
+      var eSub = window.gperiodState.endSub;
+
+      var sDateStr = '';
+      var eDateStr = '';
+
+      var monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+      if (mode === 'month') {
+        var sMNum = monthNames.indexOf(sSub) + 1;
+        var eMNum = monthNames.indexOf(eSub) + 1;
+        if (sMNum === 0) sMNum = config.startMonthNum;
+        if (eMNum === 0) eMNum = monthNames.indexOf(config.months[11]) + 1;
+
+        var calStartYear = sMNum < config.startMonthNum ? sYear + 1 : sYear;
+        var calEndYear = eMNum < config.startMonthNum ? eYear + 1 : eYear;
+
+        var lastDayOfEndMonth = getLastDayOfMonth(calEndYear, eMNum);
+
+        sDateStr = formatDateMMDDYYYY(sMNum, 1, calStartYear);
+        eDateStr = formatDateMMDDYYYY(eMNum, lastDayOfEndMonth, calEndYear);
+
+      } else if (mode === 'quarter') {
+        var qObjS = config.quarters.find(function(q) { return q.id === sSub; }) || config.quarters[0];
+        var qObjE = config.quarters.find(function(q) { return q.id === eSub; }) || config.quarters[3];
+
+        var qStartYear = qObjS.startIsNextYear ? sYear + 1 : sYear;
+        var qEndYear = qObjE.endIsNextYear ? eYear + 1 : eYear;
+
+        var qLastDay = getLastDayOfMonth(qEndYear, qObjE.endMonthNum);
+
+        sDateStr = formatDateMMDDYYYY(qObjS.startMonthNum, 1, qStartYear);
+        eDateStr = formatDateMMDDYYYY(qObjE.endMonthNum, qLastDay, qEndYear);
+
+      } else if (mode === 'half') {
+        var hObjS = config.halves.find(function(h) { return h.id === sSub; }) || config.halves[0];
+        var hObjE = config.halves.find(function(h) { return h.id === eSub; }) || config.halves[1];
+
+        var hStartYear = hObjS.startIsNextYear ? sYear + 1 : sYear;
+        var hEndYear = hObjE.endIsNextYear ? eYear + 1 : eYear;
+
+        var hLastDay = getLastDayOfMonth(hEndYear, hObjE.endMonthNum);
+
+        sDateStr = formatDateMMDDYYYY(hObjS.startMonthNum, 1, hStartYear);
+        eDateStr = formatDateMMDDYYYY(hObjE.endMonthNum, hLastDay, hEndYear);
+
+      } else if (mode === 'year') {
+        var startMNum = monthNames.indexOf(config.months[0]) + 1;
+        var endMNum = monthNames.indexOf(config.months[11]) + 1;
+        var yStartYear = startMNum < config.startMonthNum ? sYear + 1 : sYear;
+        var yEndYear = endMNum < config.startMonthNum ? eYear + 1 : eYear;
+        var yLastDay = getLastDayOfMonth(yEndYear, endMNum);
+
+        sDateStr = formatDateMMDDYYYY(startMNum, 1, yStartYear);
+        eDateStr = formatDateMMDDYYYY(endMNum, yLastDay, yEndYear);
+      }
+
+      window.gperiodState.startDate = sDateStr;
+      window.gperiodState.endDate = eDateStr;
+
+      var sIn = document.getElementById('gperiod-start-date');
+      var eIn = document.getElementById('gperiod-end-date');
+      if (sIn) sIn.value = sDateStr;
+      if (eIn) eIn.value = eDateStr;
+    };
+
+    // Rule 4: Non-Destructive Tab Switch Handler
+    window.selectPeriodMode = function(mode, btn, evt) {
+      if (evt) evt.stopPropagation();
+      window.gperiodState.mode = mode;
+
+      var tabs = document.querySelectorAll('.gperiod-tab');
+      tabs.forEach(function(t) { t.classList.remove('active'); });
+      if (btn) btn.classList.add('active');
+
+      projectActiveDatesToUI();
+      populateGlobalPeriodYearOptions(window.gperiodState.startYear, window.gperiodState.endYear);
+      renderGlobalPeriodSubGrids();
+    };
+
+    window.changeStartYear = function(delta, evt) {
+      if (evt) evt.stopPropagation();
+      window.gperiodState.startYear += delta;
+      populateGlobalPeriodYearOptions(window.gperiodState.startYear, window.gperiodState.endYear);
+      updatePeriodDateInputs();
+      projectActiveDatesToUI();
+      renderGlobalPeriodSubGrids();
+    };
+
+    window.changeEndYear = function(delta, evt) {
+      if (evt) evt.stopPropagation();
+      window.gperiodState.endYear += delta;
+      populateGlobalPeriodYearOptions(window.gperiodState.startYear, window.gperiodState.endYear);
+      updatePeriodDateInputs();
+      projectActiveDatesToUI();
+      renderGlobalPeriodSubGrids();
+    };
+
+    window.updateStartYearGrid = function(val) {
+      var parsed = parseInt(val, 10);
+      if (!isNaN(parsed)) {
+        window.gperiodState.startYear = parsed;
+        populateGlobalPeriodYearOptions(window.gperiodState.startYear, window.gperiodState.endYear);
+        updatePeriodDateInputs();
+        projectActiveDatesToUI();
+        renderGlobalPeriodSubGrids();
+      }
+    };
+
+    window.updateEndYearGrid = function(val) {
+      var parsed = parseInt(val, 10);
+      if (!isNaN(parsed)) {
+        window.gperiodState.endYear = parsed;
+        populateGlobalPeriodYearOptions(window.gperiodState.startYear, window.gperiodState.endYear);
+        updatePeriodDateInputs();
+        projectActiveDatesToUI();
+        renderGlobalPeriodSubGrids();
+      }
+    };
+
+    window.filterKPIDataByGlobalRange = function(startStr, endStr) {
+      if (!_currentKPIData) return;
+
+      var startDate = startStr ? new Date(startStr) : null;
+      var endDate = endStr ? new Date(endStr) : null;
+
+      function isPeriodInRange(periodText) {
+        if (!startDate || !endDate || isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return true;
+        
+        var pDate = null;
+        var parts = String(periodText).trim().split(/\s+/);
+        if (parts.length === 2) {
+          var mStr = parts[0];
+          var yStr = parts[1];
+          var monthIdx = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"].indexOf(mStr.substring(0,3).toLowerCase());
+          if (monthIdx !== -1 && !isNaN(yStr)) {
+            pDate = new Date(parseInt(yStr, 10), monthIdx, 15);
+          }
+        } else if (parts.length === 1 && !isNaN(parts[0])) {
+          pDate = new Date(parseInt(parts[0], 10), 6, 1);
+        }
+
+        if (!pDate) return true;
+
+        var startCompare = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+        var endCompare = new Date(endDate.getFullYear(), endDate.getMonth(), 31);
+        return (pDate >= startCompare && pDate <= endCompare);
+      }
+
+      // 1. Filter Data Table Rows
+      var tbody = document.getElementById('kpi-detail-data-table-body');
+      if (tbody) {
+        var rows = tbody.querySelectorAll('tr');
+        rows.forEach(function(tr) {
+          var periodCell = tr.cells[0] ? tr.cells[0].textContent.trim() : '';
+          if (isPeriodInRange(periodCell)) {
+            tr.style.display = '';
+          } else {
+            tr.style.display = 'none';
+          }
+        });
+      }
+
+      // 2. Filter Graph Data
+      if (_currentKPIChart && _currentKPIData.chart) {
+        var origLabels = _currentKPIData.chart.labels || [];
+        var origActuals = _currentKPIData.chart.actual_series || [];
+        var origTargets = _currentKPIData.chart.target_series || [];
+
+        var filteredLabels = [];
+        var filteredActuals = [];
+        var filteredTargets = [];
+
+        origLabels.forEach(function(lbl, idx) {
+          if (isPeriodInRange(lbl)) {
+            filteredLabels.push(lbl);
+            filteredActuals.push(origActuals[idx]);
+            filteredTargets.push(origTargets[idx]);
+          }
+        });
+
+        if (filteredLabels.length > 0) {
+          _currentKPIChart.data.labels = filteredLabels;
+          _currentKPIChart.data.datasets[0].data = filteredActuals;
+          _currentKPIChart.data.datasets[1].data = filteredTargets;
+        } else {
+          _currentKPIChart.data.labels = origLabels;
+          _currentKPIChart.data.datasets[0].data = origActuals;
+          _currentKPIChart.data.datasets[1].data = origTargets;
+        }
+        _currentKPIChart.update('active');
+      }
+    };
+
+    window.applyGlobalPeriodFilter = function(evt) {
+      if (evt) evt.stopPropagation();
+
+      // 1. Sync current DOM date input values into gperiodState
+      var sIn = document.getElementById('gperiod-start-date');
+      var eIn = document.getElementById('gperiod-end-date');
+      if (sIn && sIn.value) window.gperiodState.startDate = sIn.value.trim();
+      if (eIn && eIn.value) window.gperiodState.endDate = eIn.value.trim();
+
+      var yr = window.gperiodState.startYear || 2026;
+      window.currentScorecardYear = yr;
+
+      // 2. Update button label
+      var lbl = document.getElementById('global-period-label');
+      if (lbl) {
+        var modeName = window.gperiodState.mode ? (window.gperiodState.mode.charAt(0).toUpperCase() + window.gperiodState.mode.slice(1)) : 'Custom';
+        lbl.textContent = (window.gperiodState.startSub || 'Period') + ' ' + yr + ' · ' + modeName;
+      }
+
+      // 3. Trigger scorecard refresh with active global date range
+      if (typeof loadScorecards === 'function') {
+        loadScorecards();
+      }
+
+      // 4. Always filter current KPI Detail Data Table & Chart dynamically
+      if (typeof filterKPIDataByGlobalRange === 'function') {
+        filterKPIDataByGlobalRange(window.gperiodState.startDate, window.gperiodState.endDate);
+      }
+
+      // 5. If KPI Detail view is active, re-fetch backend with new date range and re-apply client filter
+      var kpiView = document.getElementById('view-kpi-detail');
+      if (kpiView && (kpiView.style.display !== 'none' || kpiView.classList.contains('active')) && _currentKPIData && _currentKPIData.kpi_id) {
+        if (typeof openKPIDetailView === 'function') {
+          var titleEl = document.getElementById('kpi-detail-title');
+          var currentTitle = titleEl ? titleEl.textContent : '';
+          openKPIDetailView(_currentKPIData.kpi_id, currentTitle).then(function() {
+            if (typeof filterKPIDataByGlobalRange === 'function') {
+              filterKPIDataByGlobalRange(window.gperiodState.startDate, window.gperiodState.endDate);
+            }
+          });
+        }
+      }
+
+      toggleGlobalPeriodPicker(false);
+    };
+
+    document.addEventListener('click', function(e) {
+      var wrap = document.querySelector('.global-period-picker-wrap');
+      if (!wrap) return;
+      if (e.target && (wrap.contains(e.target) || (e.composedPath && e.composedPath().includes(wrap)))) {
+        return;
+      }
+      toggleGlobalPeriodPicker(false);
+    });
+
+
+    async function loadScorecards(forceId) {
       const grid = document.getElementById('scorecardGrid');
       if (typeof window.isTokenValid === 'function' && !window.isTokenValid()) return;
+      if (forceId !== undefined && forceId !== null && forceId !== '') {
+        var fid = parseInt(forceId, 10);
+        window._activeScorecardId = (!isNaN(fid) && fid > 0) ? fid : 0;
+      }
+      if (!window._scSelectPopulated || !window._activeScorecardId) {
+        var ok = await populateScorecardSelector();
+        if (ok) window._scSelectPopulated = true;
+      }
       try {
-        const balancedUrl = (window.BACKEND || '') + '/scorecards/balanced';
+        var balancedUrl = (window.BACKEND || '') + '/scorecards/balanced';
+        var queryParams = [];
+        if (window._activeScorecardId > 0) queryParams.push('scorecard_id=' + window._activeScorecardId);
+
+        // Dynamically and exclusively pull active date_range from global date engine
+        var gStart = (window.gperiodState && window.gperiodState.startDate) ? window.gperiodState.startDate : '';
+        var gEnd = (window.gperiodState && window.gperiodState.endDate) ? window.gperiodState.endDate : '';
+        if (gStart && gEnd) {
+          queryParams.push('date_range=' + encodeURIComponent(gStart + ' - ' + gEnd));
+        }
+        if (queryParams.length > 0) balancedUrl += '?' + queryParams.join('&');
         const resp = await (window.authFetch || fetch)(balancedUrl, { cache: 'no-store' });
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const bData = await resp.json();
         if (bData && Array.isArray(bData.perspectives) && bData.perspectives.length > 0) {
           window._balancedScorecardData = bData;
+          updateScorecardHeader(bData);
+          renderTabBar(bData);
+          syncScorecardSelect();
           var html = '';
           bData.perspectives.forEach(function(p) {
             var pName = p.name;
@@ -10359,7 +12660,7 @@ else{setTimeout(initRiskPage,100);}
                     '<div style="width:40px;height:40px;border-radius:12px;background:' + dim + ';border:1px solid ' + border + ';display:flex;align-items:center;justify-content:center;font-size:20px">' + icon + '</div>' +
                     '<div>' +
                       '<div style="font-size:13px;font-weight:700;color:var(--text,#f8fafc);letter-spacing:-0.01em">' + pName + '</div>' +
-                      '<div style="font-size:10px;color:var(--text3,#64748b);font-family:\'DM Mono\',monospace;margin-top:2px">' + p.total_kpis + ' KPIs</div>' +
+                      '<div style="font-size:10px;color:var(--text3,#64748b);font-family:\'DM Mono\',monospace;margin-top:2px">' + p.total_kpis + ' KPIs' + (p.weight && Math.abs(p.weight - 1) > 0.01 ? ' · Weight: ' + p.weight + '%' : '') + '</div>' +
                     '</div>' +
                   '</div>' +
                   '<div style="text-align:right">' +
@@ -10388,10 +12689,10 @@ else{setTimeout(initRiskPage,100);}
             if (allKpiRows.length > 0) {
               var kpiHtml = '<thead><tr style="background:var(--surface2,#1e293b);border-bottom:1px solid var(--border,#334155);color:var(--text3,#94a3b8);font-size:10px;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;"><th style="text-align:left;padding:10px 14px;width:100px;">Code</th><th style="text-align:left;padding:10px 14px;">KPI</th><th style="text-align:right;padding:10px 14px;width:120px;">Target</th><th style="text-align:right;padding:10px 14px;width:120px;">Actual</th><th style="text-align:center;padding:10px 14px;width:100px;">Status</th></tr></thead><tbody>';
               kpiHtml += allKpiRows.slice(0, 10).map(function(k) {
-                var st = (k.status || 'on-track').toLowerCase();
-                var badgeBg = (st === 'on-track' || st === 'on track') ? 'rgba(16,185,129,0.15)' : (st === 'at-risk' || st === 'at risk') ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)';
-                var badgeColor = (st === 'on-track' || st === 'on track') ? '#10b981' : (st === 'at-risk' || st === 'at risk') ? '#f59e0b' : '#ef4444';
-                var badgeText = (st === 'on-track' || st === 'on track') ? '🟢 On Track' : (st === 'at-risk' || st === 'at risk') ? '🟡 At Risk' : '🔴 Critical';
+                var normSt = normalizeKPIStatus(k);
+                var badgeBg = (normSt === 'outstanding') ? 'rgba(6,182,212,0.15)' : (normSt === 'on-track') ? 'rgba(16,185,129,0.15)' : (normSt === 'moderate') ? 'rgba(234,179,8,0.15)' : (normSt === 'at-risk') ? 'rgba(249,115,22,0.15)' : 'rgba(239,68,68,0.15)';
+                var badgeColor = (normSt === 'outstanding') ? '#06b6d4' : (normSt === 'on-track') ? '#10b981' : (normSt === 'moderate') ? '#eab308' : (normSt === 'at-risk') ? '#f97316' : '#ef4444';
+                var badgeText = (normSt === 'outstanding') ? '🔵 Outstanding' : (normSt === 'on-track') ? '🟢 On Track' : (normSt === 'moderate') ? '🟡 Moderate' : (normSt === 'at-risk') ? '🟠 At Risk' : '🔴 Critical';
                 var nm = k.name || 'KPI';
                 var tgt = k.target_formatted || k.target || '—';
                 var act = k.actual_formatted || k.actual || '—';
@@ -10409,9 +12710,14 @@ else{setTimeout(initRiskPage,100);}
             if (hash.includes('#scorecard/perspective/') || hash.includes('#scorecard/details/') || hash.includes('#scorecard/')) {
               const parts = hash.split('/');
               if (parts.length >= 3) {
-                const pKey = parts[parts.length - 1];
+                const pKey = decodeURIComponent(parts[parts.length - 1]);
                 if (pKey && pKey !== 'scorecard') {
-                  const tabKey = perspToTabKey(pKey);
+                  var tabKey = null;
+                  if (window._balancedScorecardData && Array.isArray(window._balancedScorecardData.perspectives)) {
+                    var exact = window._balancedScorecardData.perspectives.find(function(p) { return p.tab === pKey; });
+                    if (exact) tabKey = exact.tab;
+                  }
+                  if (!tabKey) tabKey = perspToTabKey(pKey);
                   if (tabKey && tabKey !== 'all') {
                     switchScorecardTab(tabKey, null, false);
                   }
@@ -10439,8 +12745,8 @@ else{setTimeout(initRiskPage,100);}
       }
     });
 
-    if (typeof window.isTokenValid === 'function' && window.isTokenValid()) { loadScorecards(); }
-    else if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', function() { if (typeof window.isTokenValid === 'function' && window.isTokenValid()) loadScorecards(); }); }
+    if (typeof window.isTokenValid === 'function' && window.isTokenValid()) { window._activeScorecardId = resolveInitialScorecardId(); loadScorecards(); }
+    else if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', function() { if (typeof window.isTokenValid === 'function' && window.isTokenValid()) { window._activeScorecardId = resolveInitialScorecardId(); loadScorecards(); } }); }
   })();
   </script>
 
@@ -10526,17 +12832,6 @@ else{setTimeout(initRiskPage,100);}
       </div>
       <div id="scorecard-tasks-out" class="ai-output-area" style="display:none;"></div>
       <button class="btn btn-primary" style="font-size:11px;width:100%;margin-top:8px" onclick="generateModuleTasks('scorecard',this)">⚡ Generate AI Tasks for Exec Approval</button>
-    </div>
-  </div>
-
-  <!-- KPI Detail Table -->
-  <div style="margin-top:24px">
-    <div style="font-size:13px;font-weight:700;margin-bottom:10px">📋 KPI Detail (Top Performance Indicators)</div>
-    <div style="background:var(--bg2,#0f172a);border:1px solid var(--border,#1e293b);border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.15);">
-      <table id="kpi-table" style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead><tr style="background:var(--surface2,#1e293b);border-bottom:1px solid var(--border,#334155);color:var(--text3,#94a3b8);font-size:10px;text-transform:uppercase;letter-spacing:0.06em;font-weight:700;"><th style="text-align:left;padding:10px 14px;width:100px;">Code</th><th style="text-align:left;padding:10px 14px;">KPI</th><th style="text-align:right;padding:10px 14px;width:120px;">Target</th><th style="text-align:right;padding:10px 14px;width:120px;">Actual</th><th style="text-align:center;padding:10px 14px;width:100px;">Status</th></tr></thead>
-        <tbody><tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text3,#94a3b8)">⚡ Loading KPI details...</td></tr></tbody>
-      </table>
     </div>
   </div>
 
@@ -17280,7 +19575,12 @@ async function apiGet(endpoint, params = {}) {
   const url = API_BASE_URL + endpoint + (queryString ? `?${queryString}` : '');
   try {
     const headers = { 'Content-Type': 'application/json' };
-    if (API_TOKEN) headers['Authorization'] = `Bearer ${API_TOKEN}`;
+    const tok = localStorage.getItem('stratroom_token') || localStorage.getItem('sr_backend_token') || (typeof getToken === 'function' ? getToken() : '') || API_TOKEN || window.API_TOKEN || '';
+    if (tok) {
+      headers['Authorization'] = `Bearer ${tok}`;
+      API_TOKEN = tok;
+      window.API_TOKEN = tok;
+    }
     const response = await fetch(url, { method: 'GET', headers });
     if (response.status === 401) { if (typeof window.handleSessionExpired === 'function') window.handleSessionExpired(); return null; }
     if (!response.ok) throw new Error(`API Error: ${response.status}`);
@@ -17446,21 +19746,41 @@ async function syncAllModules() {
 async function refreshDashboardKPIs() {
   if (typeof window.isTokenValid === 'function' && !window.isTokenValid()) return;
   if (!API_TOKEN) return;
-  const [riskData, kpiData, initiativesData, budgetData] = await Promise.all([
-    apiGet(`/riskList/${CURRENT_EMP_ID}`),
-    apiGet('/scoreCardList'),
-    apiGet('/initiativesList'),
-    apiGet(`/budgetsList/${CURRENT_PAGE_ID}`)
-  ]);
-  const riskCritical = Array.isArray(riskData) ? riskData.filter(r => (r.resHeat||r.residualHeat||0) >= 20).length : 0;
-  const kpiOnTrack = Array.isArray(kpiData) ? kpiData.filter(s => s.status === 'on-track').length : 0;
-  const initiativesOffTrack = Array.isArray(initiativesData) ? initiativesData.filter(i => i.status === 'off-track').length : 0;
-  const totalBudget = Array.isArray(budgetData) && budgetData.length ? budgetData.reduce((sum,b) => sum + (b.total||b.totalBudget||0), 0) : 0;
-  const set = (sel, val) => { const el = document.querySelector(sel); if (el) el.innerHTML = val; };
-  set('[data-api="kpi-risk"] .kpi-value', riskCritical);
-  if (kpiData?.length) set('[data-api="kpi-scorecard"] .kpi-value', `${Math.round((kpiOnTrack/kpiData.length)*100)}%`);
-  set('[data-api="kpi-projects"] .kpi-value', initiativesOffTrack);
-  set('[data-api="budget-total"] .kpi-value', `$${(totalBudget/1000000).toFixed(1)}M`);
+
+  var dateRangeStr = '';
+  if (typeof window.getGlobalDateRange === 'function') {
+    dateRangeStr = window.getGlobalDateRange() || '';
+  }
+  if (!dateRangeStr) {
+    dateRangeStr = localStorage.getItem('active_date_range') || '';
+  }
+
+  var summaryUrl = '/dashboard/summary' + (dateRangeStr ? '?date_range=' + encodeURIComponent(dateRangeStr) : '');
+  try {
+    var stats = await authFetch(summaryUrl);
+    if (stats && typeof window.hydrateDashboardKPIs === 'function') {
+      window.hydrateDashboardKPIs(stats);
+
+      // Dynamically update Board Readiness Score & Gradient Bar
+      var currentScore = stats.strategic_health || 78;
+      var currentEl = document.getElementById('board-readiness-current-val');
+      if (currentEl) {
+        var scoreColor = currentScore >= 75 ? '#10b981' : (currentScore >= 50 ? '#f59e0b' : '#ef4444');
+        currentEl.style.color = scoreColor;
+        currentEl.innerHTML = currentScore + '<span style="font-size:20px">%</span>';
+      }
+      var maskEl = document.getElementById('readiness-bar-fill-mask');
+      if (maskEl) {
+        maskEl.style.width = Math.max(0, 100 - currentScore) + '%';
+      }
+      var markerEl = document.getElementById('readiness-bar-marker');
+      if (markerEl) {
+        markerEl.style.left = Math.min(100, Math.max(0, currentScore)) + '%';
+      }
+    }
+  } catch(e) {
+    console.warn('Dashboard sync warning:', e);
+  }
 }
 
 // ============================================================
@@ -17846,31 +20166,56 @@ function updateUserStats(stats) {
 // ── Theme ──
 function toggleTheme() {
   const body = document.body;
-  const isLight = body.classList.contains('theme-light');
+  const isLightNow = body.classList.contains('theme-light') || body.classList.contains('light-mode');
+  const nextLight = !isLightNow;
   const themeLabel = document.getElementById('theme-label');
-  if (isLight) {
-    body.classList.remove('theme-light');
-    if (themeLabel) themeLabel.textContent = 'Dark';
-    localStorage.setItem('stratroom_theme', 'dark');
-  } else {
-    body.classList.add('theme-light');
+  
+  if (nextLight) {
+    body.classList.add('theme-light', 'light-mode');
+    body.setAttribute('data-theme', 'light');
     if (themeLabel) themeLabel.textContent = 'Light';
     localStorage.setItem('stratroom_theme', 'light');
+  } else {
+    body.classList.remove('theme-light', 'light-mode');
+    body.removeAttribute('data-theme');
+    if (themeLabel) themeLabel.textContent = 'Dark';
+    localStorage.setItem('stratroom_theme', 'dark');
+  }
+
+  const kpiDetail = document.getElementById('view-kpi-detail');
+  if (kpiDetail) {
+    kpiDetail.classList.toggle('light-mode', nextLight);
+    kpiDetail.classList.toggle('light-theme', nextLight);
+    if (nextLight) kpiDetail.setAttribute('data-theme', 'light');
+    else kpiDetail.removeAttribute('data-theme');
   }
   updateThemeToggle();
 }
 
 function updateThemeToggle() {
-  const isLight = document.body.classList.contains('theme-light');
+  const isLight = document.body.classList.contains('theme-light') || document.body.classList.contains('light-mode');
   const thumb = document.querySelector('.theme-toggle-thumb');
   if (thumb) thumb.style.transform = isLight ? 'translateX(13px)' : 'translateX(0px)';
+  const kpiDetail = document.getElementById('view-kpi-detail');
+  if (kpiDetail) {
+    kpiDetail.classList.toggle('light-mode', isLight);
+    kpiDetail.classList.toggle('light-theme', isLight);
+    if (isLight) kpiDetail.setAttribute('data-theme', 'light');
+    else kpiDetail.removeAttribute('data-theme');
+  }
 }
 
 function loadThemePreference() {
+  const saved = localStorage.getItem('stratroom_theme');
+  const isLight = (saved === 'light');
   const themeLabel = document.getElementById('theme-label');
-  document.body.classList.remove('theme-light');
-  localStorage.setItem('stratroom_theme', 'dark');
-  if (themeLabel) themeLabel.textContent = 'Dark';
+  
+  document.body.classList.toggle('theme-light', isLight);
+  document.body.classList.toggle('light-mode', isLight);
+  if (isLight) document.body.setAttribute('data-theme', 'light');
+  else document.body.removeAttribute('data-theme');
+  
+  if (themeLabel) themeLabel.textContent = isLight ? 'Light' : 'Dark';
   updateThemeToggle();
 }
 
@@ -20229,6 +22574,9 @@ function sendModuleChatTo(moduleId, inputId, messagesId) {
     function refreshStandaloneStats() {
         // Fetch live counts from backend API and update stat cards
         if (typeof window.authFetch !== 'function') return;
+        // Never fire these with a stale/expired token: on page load they would
+        // 401 and clear the session via handleSessionExpired (auto-logout loop).
+        if (typeof window.isTokenValid === 'function' && !window.isTokenValid()) return;
         var statMap = {
             'stat-risk-count':      '/risks',
             'stat-scorecard-count': '/scorecards',
@@ -20509,9 +22857,12 @@ window.sendModuleChat=function(moduleId){
   var container=document.getElementById('mod-chat-'+moduleId);
   if(!input||!container)return;
   var userMsg=input.value.trim();if(!userMsg)return;
+  var curUser = (typeof window.CurrentUser !== 'undefined' ? window.CurrentUser : null) || (window.currentUser || { role: localStorage.getItem('user_role') || 'CEO', department: localStorage.getItem('user_dept') || 'executive' });
+  var curRole = curUser.role || 'CEO';
+  var curDept = curUser.department || 'executive';
   var sensitiveKWs=['salary','confidential','other department','ceo salary','private'];
-  if(sensitiveKWs.some(function(kw){return userMsg.toLowerCase().includes(kw);})&&CurrentUser.role!=='CEO'&&CurrentUser.role!=='CFO'){
-    if(container){var deny=document.createElement('div');deny.className='smc-msg-bubble';deny.innerHTML='<div class="smc-avatar">SR</div><div class="smc-bubble-text" style="font-size:12px;color:var(--amber);background:var(--amber-dim);border-left:3px solid var(--amber);padding:10px 14px;border-radius:9px"><div style="font-weight:700;margin-bottom:4px">🔒 Access Restricted</div><div>I understand you\'re asking about sensitive information. As '+CurrentUser.role+', I can only share data relevant to your role and department.</div><div style="font-size:10px;color:var(--text3);margin-top:6px">💡 Try asking about '+CurrentUser.department+' instead.</div></div></div>';container.appendChild(deny);container.scrollTop=container.scrollHeight;setTimeout(function(){deny.remove();},8000);}
+  if(sensitiveKWs.some(function(kw){return userMsg.toLowerCase().includes(kw);})&&curRole!=='CEO'&&curRole!=='CFO'){
+    if(container){var deny=document.createElement('div');deny.className='smc-msg-bubble';deny.innerHTML='<div class="smc-avatar">SR</div><div class="smc-bubble-text" style="font-size:12px;color:var(--amber);background:var(--amber-dim);border-left:3px solid var(--amber);padding:10px 14px;border-radius:9px"><div style="font-weight:700;margin-bottom:4px">🔒 Access Restricted</div><div>I understand you\'re asking about sensitive information. As '+curRole+', I can only share data relevant to your role and department.</div><div style="font-size:10px;color:var(--text3);margin-top:6px">💡 Try asking about '+curDept+' instead.</div></div></div>';container.appendChild(deny);container.scrollTop=container.scrollHeight;setTimeout(function(){deny.remove();},8000);}
     input.value='';return;
   }
   // Disable send button and show loading
@@ -20532,11 +22883,12 @@ window.sendModuleChat=function(moduleId){
     cfg.model = 'mock';
     cfg.baseUrl = null;
   }
+  var tok = (typeof window.getToken === 'function' ? window.getToken() : '') || localStorage.getItem('stratroom_token') || localStorage.getItem('sr_backend_token') || localStorage.getItem('api-token') || (window.API_TOKEN || '');
   var ac=new AbortController();var to=setTimeout(function(){ac.abort();},45000);
   fetch('/agents/chat',{
     method:'POST',
     signal:ac.signal,
-    headers:{'Content-Type':'application/json','Authorization':'Bearer '+getToken()},
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
     body:JSON.stringify({agent:agentDomain,message:userMsg,provider:cfg.provider,api_key:cfg.apiKey||'',model:cfg.model,conversation_id:_agentConversations[agentDomain]||null,base_url:cfg.baseUrl})
   }).then(function(r){clearTimeout(to);return r.json();}).then(function(data){
     ty.remove();
@@ -21469,10 +23821,29 @@ if (document.readyState === 'loading') {
   };
 
   // ── TOKEN MANAGEMENT ──
-  function getToken() { return localStorage.getItem('sr_backend_token') || ''; }
+  function getToken() {
+    return localStorage.getItem('stratroom_token') ||
+           localStorage.getItem('sr_backend_token') ||
+           localStorage.getItem('api-token') ||
+           sessionStorage.getItem('stratroom_token') ||
+           (window.API_TOKEN || '');
+  }
   window.getToken = getToken;
-  function setToken(t) { localStorage.setItem('sr_backend_token', t); }
-  function clearToken() { localStorage.removeItem('sr_backend_token'); localStorage.removeItem('stratroom_token'); localStorage.removeItem('api-token'); }
+  function setToken(t) {
+    if (t) {
+      localStorage.setItem('stratroom_token', t);
+      localStorage.setItem('sr_backend_token', t);
+      localStorage.setItem('api-token', t);
+      window.API_TOKEN = t;
+    }
+  }
+  function clearToken() {
+    localStorage.removeItem('sr_backend_token');
+    localStorage.removeItem('stratroom_token');
+    localStorage.removeItem('api-token');
+    sessionStorage.removeItem('stratroom_token');
+    window.API_TOKEN = '';
+  }
   window.clearToken = clearToken;
   window.setToken = setToken;
 
@@ -21545,12 +23916,23 @@ if (document.readyState === 'loading') {
         setToken(data.access_token);
         localStorage.setItem('stratroom_token', data.access_token);
         localStorage.setItem('api-token', data.access_token);
-        if (typeof API_TOKEN !== 'undefined') window.API_TOKEN = data.access_token;
+        if (typeof API_TOKEN !== 'undefined') API_TOKEN = data.access_token;
+        window.API_TOKEN = data.access_token;
+        // Stamp login time so handleSessionExpired can ignore stale-request 401s
+        // racing with this fresh session instead of nuking it (auto-logout loop).
+        window._lastLoginAt = Date.now();
 
         // Fetch user profile
         try {
           const meResp = await authFetch(BACKEND + API.auth.me);
-          if (meResp.ok) {
+          if (meResp && meResp.status === 401) {
+            // Backend rejected the freshly-issued token — abort the login instead
+            // of entering the dashboard with a dead/cleared session.
+            if (errEl) { errEl.textContent = 'Login could not be verified. Please try again.'; errEl.style.display = 'block'; }
+            if (btn) { btn.textContent = 'Sign in →'; btn.disabled = false; }
+            return;
+          }
+          if (meResp && meResp.ok) {
             const me = await meResp.json();
             localStorage.setItem('user_name', me.full_name || 'User');
             localStorage.setItem('user_role', me.role || 'Member');
@@ -22179,7 +24561,8 @@ if (document.readyState === 'loading') {
       const ar = stats.kpi_health_at_risk || 0;
       const cr = stats.kpi_health_critical || 0;
       const totalKPIs = oh + ar + cr;
-      if (v) v.innerHTML = oh + '<span style="font-size:14px;font-weight:500">/' + totalKPIs + '</span>';
+      const pct = Math.round((oh / (totalKPIs || 1)) * 100);
+      if (v) v.innerHTML = oh + '<span style="font-size:14px;font-weight:500">/' + totalKPIs + ' (' + pct + '%)</span>';
       if (l) l.textContent = '📊 KPI Health';
       if (det) {
         var perspectives = stats.kpi_health_perspectives || {};

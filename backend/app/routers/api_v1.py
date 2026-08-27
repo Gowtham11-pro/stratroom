@@ -56,31 +56,35 @@ async def v1_auth_login(payload: V1LoginRequest):
 
 @router.get("/dashboard/kpis")
 async def v1_dashboard_kpis(
-    db: AsyncSession = Depends(get_db),
     ctx: dict = Depends(require_role("member")),
 ):
     org_id = ctx["org_id"]
+    row = {"total": 0, "on_track": 0, "critical": 0, "at_risk": 0}
     try:
-        result = await db.execute(
-            text("""
-                SELECT
-                    COUNT(*) as total,
-                    SUM(CASE WHEN status = 'on-track' THEN 1 ELSE 0 END) as on_track,
-                    SUM(CASE WHEN status = 'critical' THEN 1 ELSE 0 END) as critical,
-                    SUM(CASE WHEN status = 'at-risk' THEN 1 ELSE 0 END) as at_risk
-                FROM scorecards WHERE org_id = :oid
-            """),
-            {"oid": org_id},
+        from app.routers.scorecards import JUNK_KPIS_SQL
+        rows = await bridge._mysql(
+            "SELECT status FROM scorecard_kpis WHERE id IN ("
+            f"SELECT MIN(id) FROM scorecard_kpis WHERE org_id = %s {JUNK_KPIS_SQL} "
+            "GROUP BY perspective, kpi_name, target, actual, status"
+            ")",
+            (org_id,),
         )
-        row = dict(result.mappings().first())
+        for r in rows or []:
+            row["total"] += 1
+            st = (r.get("status") or "").lower().strip()
+            if st in ("on-track", "on track", "completed", "on_target"):
+                row["on_track"] += 1
+            elif st in ("at-risk", "at risk", "overdue", "warning"):
+                row["at_risk"] += 1
+            elif st in ("critical", "off-track", "off_track", "missed"):
+                row["critical"] += 1
     except Exception as exc:
         logger.warning("v1_kpis query failed for org=%s: %s", org_id, exc)
-        row = {"total": 0, "on_track": 0, "critical": 0, "at_risk": 0}
     return {
-        "total": int(row.get("total", 0)),
-        "on_track": int(row.get("on_track", 0)),
-        "critical": int(row.get("critical", 0)),
-        "at_risk": int(row.get("at_risk", 0)),
+        "total": int(row["total"]),
+        "on_track": int(row["on_track"]),
+        "critical": int(row["critical"]),
+        "at_risk": int(row["at_risk"]),
     }
 
 
